@@ -1,0 +1,8 @@
+{% extends "base.html" %}
+{% block title %}{{ job.title }}{% endblock %}
+{% block body %}
+<div class="page-narrow">
+  <p><a href="/jobs">‹ Kembali ke daftar</a></p>
+  {% include "partials/job_panel.html" %}
+</div>
+{% endblock %}

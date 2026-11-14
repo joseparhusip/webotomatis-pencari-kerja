@@ -1,0 +1,161 @@
+{% extends "base.html" %}
+{% block title %}Pengaturan{% endblock %}
+{% block body %}
+<div class="page">
+  <header class="page-head">
+    <div>
+      <h1>Pengaturan</h1>
+      <p class="sub">Status sumber lowongan, koneksi pengiriman, dan riwayat scraping.</p>
+    </div>
+    <form class="actions" hx-post="/scrape" hx-target="#scrape-flash" hx-swap="innerHTML">
+      <span id="scrape-flash"></span>
+      <button class="btn btn-primary" type="submit" hx-disabled-elt="this">Jalankan scraping sekarang</button>
+    </form>
+  </header>
+
+  <section class="box integrations" aria-label="Koneksi">
+    <div class="integration">
+      <div class="stat-label">Kirim email</div>
+      {% if cfg.smtp_ready %}
+      <div class="state"><span class="dot dot-ok" aria-hidden="true"></span>Terhubung</div>
+      <div class="stat-sub">{{ cfg.smtp_user }}</div>
+      {% else %}
+      <div class="state"><span class="dot dot-warn" aria-hidden="true"></span>Belum diatur</div>
+      <div class="stat-sub">Isi SMTP_USER & SMTP_PASSWORD (Gmail App Password) di .env</div>
+      {% endif %}
+    </div>
+    <div class="integration">
+      <div class="stat-label">Surat lamaran AI</div>
+      {% if cfg.ai_ready %}
+      <div class="state"><span class="dot dot-ok" aria-hidden="true"></span>{{ cfg.ai_label }} aktif</div>
+      <div class="stat-sub">{{ cfg.model }}</div>
+      {% else %}
+      <div class="state"><span class="dot" aria-hidden="true"></span>Nonaktif</div>
+      <div class="stat-sub">Memakai template bukti CV. Isi GEMINI_API_KEY untuk AI.</div>
+      {% endif %}
+    </div>
+    <div class="integration">
+      <div class="stat-label">Kuota email hari ini</div>
+      <div class="state num">{{ cfg.emails_today }} / {{ cfg.max_emails }}</div>
+      <div class="stat-sub">jeda minimal {{ cfg.gap }} dtk antar email</div>
+    </div>
+    <div class="integration">
+      <div class="stat-label">Jadwal scraping</div>
+      <div class="state">Tiap {{ cfg.interval }} jam</div>
+      <div class="stat-sub">{{ connector_names | length }} sumber · 8 keyword · maks. {{ cfg.pages }} halaman</div>
+    </div>
+  </section>
+
+  <h2 class="section-title">Sumber lowongan</h2>
+  {% if sources or inactive %}
+  <div class="src-grid">
+    {% for name, reason in inactive %}
+    <article class="src src-off">
+      <header class="src-h">
+        <span class="dot" aria-hidden="true"></span>
+        <strong>{{ SOURCE_LABELS.get(name, name) }}</strong>
+        <span class="meta">belum aktif</span>
+      </header>
+      <p class="meta">{{ reason }}.</p>
+    </article>
+    {% endfor %}
+    {% for s in sources %}{% set r = latest.get(s.id) %}
+    <article class="src">
+      <header class="src-h">
+        <span class="dot {% if not s.is_active %}{% elif r and r.error %}dot-warn{% elif r and r.finished_at %}dot-ok{% elif r %}dot-info dot-pulse{% endif %}" aria-hidden="true"></span>
+        <a href="{{ s.base_url }}" target="_blank" rel="noopener">{{ s.name }}</a>
+        <span class="meta">{{ s.type.value }}</span>
+      </header>
+      <div class="src-nums">
+        <div><div class="stat-label">Tersimpan</div><div class="stat-value">{{ (per_source.get(s.id, 0)) | number_id }}</div></div>
+        <div><div class="stat-label">Ditemukan</div><div class="stat-value">{{ r.jobs_found if r else '—' }}</div></div>
+        <div><div class="stat-label">Baru</div><div class="stat-value">{{ r.jobs_new if r else '—' }}</div></div>
+      </div>
+      <p class="meta">
+        {% if not s.is_active %}Nonaktif
+        {% elif r and r.finished_at %}Terakhir {{ r.finished_at | date_id(true) }} · {{ ((r.finished_at - r.started_at).total_seconds() | int) }} dtk
+        {% elif r %}Sedang berjalan…
+        {% else %}Belum pernah{% endif %}
+      </p>
+      {% if r and r.error %}<p class="meta text-warn">▲ {{ r.error.splitlines() | length }} request gagal · lihat riwayat</p>{% endif %}
+    </article>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="empty">Belum ada sumber tercatat. Sumber terdaftar otomatis saat scraping pertama.</p>
+  {% endif %}
+
+  <section id="instagram" class="box mb" aria-label="Akun Instagram info loker">
+    <header class="box-h">
+      <h2>Akun Instagram info loker</h2>
+      <span class="meta">Postingan 3 hari terakhir dibaca lewat Meta Graph API (Business Discovery); gambar & caption dibaca Gemini.
+        Hanya akun Instagram bisnis/kreator yang bisa dibaca.</span>
+    </header>
+    <div class="box-b">
+      {% if not ig_ready %}<p class="banner-warn">Belum aktif: {{ ig_reason }}. Lihat README bagian "Lowongan dari Instagram".</p>{% endif %}
+      {% if ig_ok %}<p class="flash flash-ok">{{ ig_ok }}</p>{% endif %}
+      {% if ig_err %}<p class="flash flash-err">{{ ig_err }}</p>{% endif %}
+      <form method="post" action="/settings/instagram" class="card-row">
+        <label class="field grow"><span class="label">Username atau link profil</span>
+          <input type="text" name="username" placeholder="@akuninfoloker atau instagram.com/akuninfoloker" required></label>
+        <button class="btn" type="submit">Tambah akun</button>
+      </form>
+      {% if ig_accounts %}
+      <table class="plain mt">
+        <thead><tr><th scope="col">Akun</th><th scope="col">Status</th><th scope="col">Dicek terakhir</th><th scope="col" class="col-num">Lowongan</th><th scope="col">Catatan</th><th scope="col"></th></tr></thead>
+        <tbody>
+        {% for a in ig_accounts %}
+          <tr>
+            <td><a href="https://www.instagram.com/{{ a.username }}/" target="_blank" rel="noopener">@{{ a.username }} ↗</a></td>
+            <td>{{ 'Aktif' if a.is_active else 'Nonaktif' }}</td>
+            <td class="meta">{{ a.last_checked_at | date_id(true) if a.last_checked_at else 'belum' }}</td>
+            <td class="col-num num">{{ a.jobs_found }}</td>
+            <td>{% if a.last_error %}<span class="meta text-danger">▲ {{ a.last_error[:120] }}</span>{% else %}<span class="meta">—</span>{% endif %}</td>
+            <td class="col-num">
+              <form method="post" action="/settings/instagram/{{ a.id }}/toggle" class="inline"><button class="btn-link" type="submit">{{ 'Nonaktifkan' if a.is_active else 'Aktifkan' }}</button></form>
+              <form method="post" action="/settings/instagram/{{ a.id }}/delete" class="inline" onsubmit="return confirm('Hapus @{{ a.username }}?')"><button class="btn-link text-danger" type="submit">Hapus</button></form>
+            </td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <p class="meta mt">Belum ada akun. Tambahkan akun-akun info loker yang biasa kamu ikuti.</p>
+      {% endif %}
+    </div>
+  </section>
+
+  <section id="riwayat" class="box" aria-label="Riwayat scraping">
+    <header class="box-h">
+      <h2>Riwayat scraping</h2>
+      {% if runs_pages > 1 %}
+      <nav class="actions pager-inline" aria-label="Halaman riwayat">
+        {% if runs_page > 1 %}<a class="btn" href="/settings?runs_page={{ runs_page - 1 }}#riwayat" hx-get="/settings?runs_page={{ runs_page - 1 }}" hx-target="#riwayat" hx-select="#riwayat" hx-swap="outerHTML">‹ Sebelumnya</a>{% endif %}
+        <span class="meta">Halaman {{ runs_page }} dari {{ runs_pages }}</span>
+        {% if runs_page < runs_pages %}<a class="btn" href="/settings?runs_page={{ runs_page + 1 }}#riwayat" hx-get="/settings?runs_page={{ runs_page + 1 }}" hx-target="#riwayat" hx-select="#riwayat" hx-swap="outerHTML">Berikutnya ›</a>{% endif %}
+      </nav>
+      {% endif %}
+      <span class="meta">Satu baris per sumber per scraping, terbaru di atas.</span>
+    </header>
+    {% if runs %}
+    <table>
+      <thead><tr><th scope="col">Mulai</th><th scope="col">Sumber</th><th scope="col" class="col-num">Durasi</th><th scope="col" class="col-num">Ditemukan</th><th scope="col" class="col-num">Baru</th><th scope="col">Error</th></tr></thead>
+      <tbody>
+      {% for r in runs %}
+        <tr>
+          <td>{{ r.started_at | date_id(true) }}</td>
+          <td>{{ r.source.name }}</td>
+          <td class="col-num num">{% if r.finished_at %}{{ ((r.finished_at - r.started_at).total_seconds() | int) }} dtk{% else %}berjalan{% endif %}</td>
+          <td class="col-num num">{{ r.jobs_found }}</td>
+          <td class="col-num num">{{ r.jobs_new }}</td>
+          <td>{% if r.error %}<details><summary class="{{ 'text-warn' if r.error.startswith('Terhenti') else 'text-danger' }}">▲ {{ 'terhenti' if r.error.startswith('Terhenti') else 'lihat' }}</summary><pre class="log">{{ r.error }}</pre></details>{% else %}<span class="meta">—</span>{% endif %}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="box-b"><p class="meta">Belum ada riwayat.</p></div>
+    {% endif %}
+  </section>
+</div>
+{% endblock %}

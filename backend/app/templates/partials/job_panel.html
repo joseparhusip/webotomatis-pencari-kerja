@@ -1,0 +1,116 @@
+{% from "partials/_macros.html" import logo %}
+<article class="panel">
+  <header class="panel-head">
+    {{ logo(job.company_logo_url, job.company_name, 'logo-lg') }}
+    <h2>{{ job.title }}</h2>
+    <button class="btn-close" type="button" data-close-drawer aria-label="Tutup">×</button>
+  </header>
+  <p class="panel-company">
+    {{ job.company_name }}
+    · {{ job.location_city or 'Lokasi tidak disebut' }}{% if job.location_province %}, {{ job.location_province }}{% endif %}
+  </p>
+
+  {% if expired %}
+  <p class="banner-warn">Lowongan ini sudah ditutup atau kedaluwarsa di situs sumber.</p>
+  {% endif %}
+
+  <dl class="facts">
+    <dt>Gaji</dt><dd class="num">{{ job.salary_min | rupiah_long(job.salary_max) }}</dd>
+    <dt>Diposting</dt><dd>{{ job.posted_at | date_id }}</dd>
+    {% if job.expires_at %}<dt>Batas lamar</dt><dd>{{ job.expires_at | date_id }}</dd>{% endif %}
+    <dt>Tipe</dt><dd>{{ EMPLOYMENT_LABELS[job.employment_type.value] if job.employment_type else '—' }}</dd>
+    <dt>Kirim via</dt>
+    <dd>{% if job.hr_email %}<span class="text-ok">{{ job.hr_email }}</span>{% else %}Portal (tidak ada email HR di iklan){% endif %}</dd>
+  </dl>
+
+  <div class="panel-actions">
+    <form hx-post="/jobs/{{ job.id }}/status" hx-target="#drawer" hx-swap="innerHTML" class="inline">
+      {% if job.status.value == 'hidden' %}
+      <button class="btn" name="status" value="seen">Tampilkan lagi</button>
+      {% else %}
+      <button class="btn" name="status" value="hidden">Sembunyikan</button>
+      {% endif %}
+      {% if job.status.value == 'saved' %}
+      <button class="btn" name="status" value="seen">Batal simpan</button>
+      {% else %}
+      <button class="btn" name="status" value="saved">Simpan</button>
+      {% endif %}
+    </form>
+    {% if job.status.value == 'applied' %}
+    <a class="btn" href="/applications">Sudah dilamar · lihat lamaran</a>
+    {% elif not expired %}
+    <form hx-post="/applications/prepare" class="inline">
+      <input type="hidden" name="job_id" value="{{ job.id }}">
+      <button class="btn btn-primary" type="submit" hx-disabled-elt="this">Siapkan lamaran</button>
+    </form>
+    {% endif %}
+  </div>
+
+  <section class="match">
+    <p><span class="score {{ job.match_score | score_class }}">Skor {{ job.match_score if job.match_score is not none else '—' }}</span>
+      <span class="meta">· {{ ROLE_LABELS[job.role_category.value] }} · level {{ LEVEL_LABELS[job.experience_level.value] | lower if job.experience_level else 'tidak disebut' }}</span></p>
+    <p class="meta">{{ job.match_reason or '' }}</p>
+    <p class="hint">Skor sementara berbasis kata kunci CV, bukan dari situs sumber.</p>
+  </section>
+
+  {# ---- Isi lowongan: apa adanya dari situs sumber ---- #}
+  {% set reqs = [] %}
+  {% if job.work_mode %}{% set _ = reqs.append(MODE_LABELS[job.work_mode.value]) %}{% endif %}
+  {% if job.experience_min is not none %}{% set _ = reqs.append(job.experience_min | exp_text(job.experience_max)) %}{% endif %}
+  {% if job.education %}{% set _ = reqs.append(job.education) %}{% endif %}
+  {% if reqs %}
+  <section class="desc">
+    <h3>Persyaratan</h3>
+    <div class="chips">{% for r in reqs %}<span class="chip">{{ r }}</span>{% endfor %}</div>
+  </section>
+  {% endif %}
+  {% if job.required_skills %}
+  <section class="desc">
+    <h3>Skill</h3>
+    <div class="chips">{% for s in job.required_skills %}<span class="chip {{ 'chip-match' if s | skill_matches(job.skills) else '' }}">{{ s }}</span>{% endfor %}</div>
+    {% if job.skills %}<p class="hint">Hijau = ada di CV kamu.</p>{% endif %}
+  </section>
+  {% endif %}
+  {% if job.benefits %}
+  <section class="desc">
+    <h3>Benefit</h3>
+    <div class="chips">{% for b in job.benefits %}<span class="chip">{{ b }}</span>{% endfor %}</div>
+  </section>
+  {% endif %}
+
+  <div id="job-text-{{ job.id }}">
+    {% if loading %}
+    <p class="banner-info" hx-post="/jobs/{{ job.id }}/refresh" hx-trigger="load" hx-target="#drawer" hx-swap="innerHTML">
+      Mengambil deskripsi lengkap dari {{ job.listings | map(attribute='source.name') | join(', ') }}…</p>
+    {% endif %}
+    {% if job.description %}
+    <section class="desc">
+      <h3>Deskripsi</h3>
+      <div class="prose">{{ job.description }}</div>
+    </section>
+    {% endif %}
+    {% if job.requirements %}
+    <section class="desc">
+      <h3>Kualifikasi</h3>
+      <div class="prose">{{ job.requirements }}</div>
+    </section>
+    {% endif %}
+    {% if not loading and not job.description and not job.requirements %}
+    <p class="meta">Situs sumber tidak menampilkan deskripsi untuk lowongan ini.</p>
+    {% endif %}
+  </div>
+
+  <footer class="source-note">
+    {% for l in job.listings %}
+    <p class="meta">
+      <a href="{{ l.url }}" target="_blank" rel="noopener">{{ l.source.name }} ↗</a>
+      {% if l.detail_error and not job.detail_fetched_at %}· <span class="text-warn">detail gagal diambil, coba buka situsnya</span>
+      {% elif job.detail_fetched_at %}· disalin dari situs sumber {{ job.detail_fetched_at | date_id(true) }}
+      {% else %}· ringkasan dari hasil pencarian{% endif %}
+    </p>
+    {% endfor %}
+    {% if job.detail_fetched_at and not loading %}
+    <button class="btn-link meta" type="button" hx-post="/jobs/{{ job.id }}/refresh" hx-target="#drawer" hx-swap="innerHTML">Perbarui dari situs sumber</button>
+    {% endif %}
+  </footer>
+</article>

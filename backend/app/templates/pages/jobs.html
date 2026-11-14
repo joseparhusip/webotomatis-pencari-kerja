@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+{% block title %}Lowongan{% endblock %}
+{% block body %}
+<div class="layout">
+  <aside class="filters">
+    <div class="filters-head">
+      <h2>Filter</h2>
+      <a class="btn-text" href="/jobs">Reset</a>
+    </div>
+    <details class="filters-toggle" open>
+      <summary>Filter</summary>
+      <form id="filter-form" action="/jobs" method="get"
+            hx-get="/jobs" hx-target="#job-results" hx-push-url="true" hx-indicator="#loading"
+            hx-trigger="change, input changed delay:400ms from:#q, submit">
+        <input type="hidden" name="f" value="1">
+
+        <label class="field">
+          <span class="label">Cari</span>
+          <input id="q" type="search" name="q" value="{{ f.q }}" placeholder="posisi, perusahaan, skill">
+        </label>
+
+        <fieldset>
+          <legend class="label">Kategori</legend>
+          <div class="checks">
+            {% for key in ['fullstack', 'frontend', 'backend', 'mobile', 'qa', 'it_support', 'data', 'it_other', 'other'] %}
+            <label><input type="checkbox" name="role" value="{{ key }}" {% if key in f.roles %}checked{% endif %}> {{ ROLE_LABELS[key] }}</label>
+            {% endfor %}
+          </div>
+        </fieldset>
+
+        <label class="field">
+          <span class="label">Lokasi</span>
+          <select name="loc">
+            {% for val, text in [('jabodetabek_remote', 'Jabodetabek + Remote'), ('jabodetabek', 'Jabodetabek'), ('remote', 'Remote'), ('', 'Semua lokasi')] %}
+            <option value="{{ val }}" {% if f.loc == val %}selected{% endif %}>{{ text }}</option>
+            {% endfor %}
+          </select>
+        </label>
+
+        <fieldset>
+          <legend class="label">Mode kerja</legend>
+          <div class="checks">
+            {% for key in ['remote', 'hybrid', 'onsite'] %}
+            <label><input type="checkbox" name="mode" value="{{ key }}" {% if key in f.modes %}checked{% endif %}> {{ MODE_LABELS[key] }}</label>
+            {% endfor %}
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend class="label">Level</legend>
+          <div class="checks">
+            {% for key in ['entry', 'junior', 'unknown', 'mid', 'senior'] %}
+            <label><input type="checkbox" name="level" value="{{ key }}" {% if key in f.levels %}checked{% endif %}> {{ LEVEL_LABELS[key] }}</label>
+            {% endfor %}
+          </div>
+        </fieldset>
+
+        <label class="field">
+          <span class="label">Gaji minimum / bulan</span>
+          <input type="text" inputmode="numeric" name="salary_min" value="{{ f.salary_min or '' }}" placeholder="mis. 6000000">
+          <span class="hint">Lowongan tanpa info gaji tetap ditampilkan.</span>
+        </label>
+
+        <label class="field">
+          <span class="label">Skor minimum</span>
+          <input type="number" min="0" max="100" step="5" name="min_score" value="{{ f.min_score or '' }}" placeholder="0–100">
+        </label>
+
+        <label class="field">
+          <span class="label">Diposting</span>
+          <select name="posted">
+            {% for val, text in [(1, '24 jam terakhir'), (3, '3 hari terakhir'), (7, '7 hari terakhir'), (14, '14 hari terakhir'), (30, '30 hari terakhir'), ('', 'Kapan saja')] %}
+            <option value="{{ val }}" {% if (f.posted_days or '') == val %}selected{% endif %}>{{ text }}</option>
+            {% endfor %}
+          </select>
+        </label>
+
+        <fieldset>
+          <legend class="label">Sumber lowongan</legend>
+          <div class="checks checks-1">
+            {% for name, n in source_options %}
+            <label><input type="checkbox" name="source" value="{{ name }}" {% if name in f.sources %}checked{% endif %}>
+              {{ SOURCE_LABELS.get(name, name) }} <span class="meta">{{ n | number_id }}</span></label>
+            {% endfor %}
+          </div>
+          <span class="hint">Tidak ada yang dicentang = semua sumber.</span>
+        </fieldset>
+
+        <fieldset>
+          <legend class="label">Status</legend>
+          <div class="checks">
+            {% for key in ['new', 'seen', 'saved', 'applied', 'hidden'] %}
+            <label><input type="checkbox" name="status" value="{{ key }}" {% if key in f.statuses %}checked{% endif %}> {{ STATUS_LABELS[key] }}</label>
+            {% endfor %}
+          </div>
+        </fieldset>
+
+        <label class="field">
+          <span class="label">Urutkan</span>
+          <select name="sort">
+            <option value="score" {% if f.sort == 'score' %}selected{% endif %}>Skor tertinggi</option>
+            <option value="newest" {% if f.sort == 'newest' %}selected{% endif %}>Terbaru</option>
+          </select>
+        </label>
+
+        <noscript><button class="btn" type="submit">Terapkan</button></noscript>
+        <p class="hint">Filter awal mengikuti profil target: 4 kategori, entry/junior, Jabodetabek + remote.</p>
+      </form>
+    </details>
+  </aside>
+
+  <main class="results">
+    <form id="apply-form" class="action-bar" hx-post="/applications/prepare" hx-disabled-elt="find button" hidden>
+      <span><span id="sel-count" class="num">0</span> dipilih</span>
+      <button class="btn" type="button" data-clear-selection>Batal pilih</button>
+      <button class="btn btn-primary" type="submit">Siapkan lamaran</button>
+    </form>
+    <div id="job-results" hx-get="/jobs" hx-include="#filter-form" hx-trigger="jobs-changed from:body">
+      {% include "partials/job_results.html" %}
+    </div>
+  </main>
+
+  <aside id="drawer" class="drawer" aria-label="Detail lowongan"></aside>
+</div>
+{% endblock %}

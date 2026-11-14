@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Lowongan{% endblock %} · Webotomatis</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%231E5B47'/%3E%3Ctext x='16' y='22' font-family='monospace' font-size='18' font-weight='700' fill='white' text-anchor='middle'%3EW%3C/text%3E%3C/svg%3E">
+  <link rel="stylesheet" href="/static/css/app.css">
+  <script src="/static/js/htmx.min.js" defer></script>
+  <script src="/static/js/app.js" defer></script>
+</head>
+<body>
+  {% set active = active | default('jobs') %}
+  <header class="topbar">
+    <a class="brand" href="/jobs" aria-label="Webotomatis, ke Lowongan">
+      <span class="brand-mark" aria-hidden="true">W</span>
+      <span class="brand-name">Webotomatis</span>
+    </a>
+    <nav class="nav" aria-label="Utama">
+      <a href="/jobs" {% if active == 'jobs' %}aria-current="page"{% endif %}>Lowongan
+        {% if nav_new_jobs %}<span class="count is-fresh" title="Lowongan baru yang cocok profil">{{ nav_new_jobs | number_id }}</span>{% endif %}</a>
+      <a href="/applications" {% if active == 'applications' %}aria-current="page"{% endif %}>Lamaran
+        {% if nav_drafts %}<span class="count" title="Draft menunggu review">{{ nav_drafts }}</span>{% endif %}</a>
+      <a href="/profile" {% if active == 'profile' %}aria-current="page"{% endif %}>Profil</a>
+      <a href="/settings" {% if active == 'settings' %}aria-current="page"{% endif %}>Pengaturan</a>
+    </nav>
+    <div class="topbar-right">
+      <div id="scrape-status">{% include "partials/scrape_status.html" %}</div>
+      <a class="avatar" href="/profile" title="{{ me_name or 'Isi profil' }}">{{ me_initials | default('?') }}</a>
+    </div>
+  </header>
+  {% block body %}{% endblock %}
+</body>
+</html>

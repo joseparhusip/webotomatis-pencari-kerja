@@ -1,0 +1,9 @@
+{# Logo perusahaan asli dari sumber; bila tidak ada / gagal dimuat → inisial. #}
+{% macro logo(url, name, size='') -%}
+<span class="logo {{ size }}" aria-hidden="true">
+  {%- if url -%}
+  <img src="{{ url }}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer"
+       onerror="this.replaceWith(document.createTextNode('{{ name | initials }}'))">
+  {%- else -%}{{ name | initials }}{%- endif -%}
+</span>
+{%- endmacro %}

@@ -1,0 +1,87 @@
+{% from "partials/_macros.html" import logo %}
+<div class="results-head">
+  <h1>Lowongan</h1>
+  <p class="summary">
+    <span class="num">{{ total | number_id }}</span> cocok filter
+    · <span class="num">{{ counts.total | number_id }}</span> di database
+    · <span class="num">{{ counts.new_today | number_id }}</span> masuk hari ini
+    <span id="loading" class="htmx-indicator meta">Memuat…</span>
+  </p>
+</div>
+
+{% if failed_runs %}
+<p class="banner-warn">
+  {{ failed_runs | length }} sumber error saat scraping terakhir ({{ failed_runs | map(attribute='source.name') | join(', ') }}).
+  <a href="/settings">Lihat log</a>
+</p>
+{% endif %}
+
+{% if counts.total == 0 %}
+<div class="empty">
+  <p>Belum ada lowongan di database.</p>
+  <p class="meta">Scraping otomatis berjalan berkala dari semua sumber yang terdaftar.</p>
+  <form hx-post="/scrape" hx-target="#scrape-flash" hx-swap="innerHTML">
+    <button class="btn btn-primary" type="submit" hx-disabled-elt="this">Jalankan scraping sekarang</button>
+  </form>
+  <div id="scrape-flash"></div>
+</div>
+{% elif not jobs %}
+<div class="empty">
+  <p>Tidak ada lowongan yang cocok dengan filter ini.</p>
+  {% if outside %}
+  <p><strong>{{ outside }} lowongan cocok dengan "{{ f.q }}"</strong> tetapi tersembunyi oleh filter (kategori, lokasi, level, atau tanggal).
+    <a href="{{ outside_url }}" hx-get="{{ outside_url }}" hx-target="#job-results" hx-push-url="true">Tampilkan semua hasil pencarian ›</a></p>
+  {% endif %}
+  <p class="meta">Coba longgarkan lokasi, level, atau rentang tanggal. <a href="/jobs?f=1">Tampilkan semua tanpa filter</a></p>
+</div>
+{% else %}
+<div class="table-wrap">
+<table class="jobs">
+  <thead>
+    <tr>
+      <th scope="col" class="col-check"><span class="sr-only">Pilih</span></th>
+      <th scope="col" class="col-logo"><span class="sr-only">Logo</span></th>
+      <th scope="col">Posisi / Perusahaan</th>
+      <th scope="col">Lokasi</th>
+      <th scope="col" class="col-num">Gaji / bulan</th>
+      <th scope="col" class="col-src">Sumber</th>
+      <th scope="col" class="col-num col-posted">Diposting</th>
+      <th scope="col" class="col-score col-num">Skor</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for job in jobs %}
+    <tr class="job-row{% if job.status.value == 'applied' %} is-applied{% endif %}" data-id="{{ job.id }}">
+      <td class="col-check">{% if job.status.value != 'applied' %}<input type="checkbox" name="job_id" value="{{ job.id }}" form="apply-form" aria-label="Pilih {{ job.title }}">{% endif %}</td>
+      <td class="col-logo">{{ logo(job.company_logo_url, job.company_name) }}</td>
+      <td class="col-title">
+        <a class="job-link" href="/jobs/{{ job.id }}" hx-get="/jobs/{{ job.id }}" hx-target="#drawer" hx-swap="innerHTML">{{ job.title }}</a>
+        {% if job.status.value == 'new' %}<span class="tag tag-new">baru</span>{% endif %}
+        {% if job.status.value == 'saved' %}<span class="tag">disimpan</span>{% endif %}
+        {% if job.status.value == 'applied' %}<span class="tag tag-ok">dilamar</span>{% endif %}
+        <div class="sub">
+          {{ job.company_name }}
+          · <span class="meta">{{ ROLE_LABELS[job.role_category.value] }}</span>
+          {% if job.apply_mode.value == 'email' %}· <span class="meta text-ok">email HR ✓</span>{% endif %}
+        </div>
+      </td>
+      <td class="col-loc">
+        {{ job.location_city | short_city }}
+        {% if job.work_mode %}<div class="sub meta">{{ MODE_LABELS[job.work_mode.value] }}</div>{% endif %}
+      </td>
+      <td class="col-num num">{{ job.salary_min | rupiah_short(job.salary_max) }}</td>
+      <td class="meta col-src">{{ job.listings | map(attribute='source.name') | unique | join(', ') }}</td>
+      <td class="col-num meta col-posted" title="{{ job.posted_at | date_id }}">{{ job.posted_at | reltime }}</td>
+      <td class="col-score col-num"><span class="score {{ job.match_score | score_class }}" title="{{ job.match_reason or '' }}">{{ job.match_score if job.match_score is not none else '—' }}</span></td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+
+<nav class="pager" aria-label="Halaman">
+  {% if prev_url %}<a class="btn" href="{{ prev_url }}" hx-get="{{ prev_url }}" hx-target="#job-results" hx-push-url="true">‹ Sebelumnya</a>{% endif %}
+  <span class="meta">Halaman {{ f.page }} dari {{ ((total + page_size - 1) // page_size) or 1 }}</span>
+  {% if next_url %}<a class="btn" href="{{ next_url }}" hx-get="{{ next_url }}" hx-target="#job-results" hx-push-url="true">Berikutnya ›</a>{% endif %}
+</nav>
+{% endif %}

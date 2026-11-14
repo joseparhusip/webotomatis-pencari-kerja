@@ -1,0 +1,59 @@
+{% if not profile %}
+<div class="empty">
+  <p>Profil belum diisi.</p>
+  <p class="meta">Surat lamaran butuh nama dan kontak kamu. Isi di halaman <a href="/profile">Profil</a>.</p>
+</div>
+{% elif app.cover_letter_text is none %}
+<div class="empty" hx-post="/applications/{{ app.id }}/generate" hx-trigger="load" hx-target="#editor" hx-swap="innerHTML">
+  <p>Membuat surat…</p>
+  <p class="meta">{{ ('Menulis dengan ' ~ ai_label ~ ' berdasarkan CV dan persyaratan lowongan. Biasanya 5–20 detik.') if ai_ready else 'Menyusun dari bukti di CV (AI nonaktif: GEMINI_API_KEY kosong).' }}</p>
+</div>
+{% else %}
+{% if error %}<p class="banner-warn">{{ error }}</p>{% endif %}
+<form id="review-form" hx-post="/applications/{{ app.id }}" hx-target="#checks" hx-swap="innerHTML"
+      hx-trigger="change, input changed delay:800ms from:#letter">
+  <fieldset class="row-field">
+    <legend class="label">Cara kirim</legend>
+    <label><input type="radio" name="apply_mode" value="email" {% if app.apply_mode.value == 'email' %}checked{% endif %}> Email ke HR</label>
+    <label><input type="radio" name="apply_mode" value="portal" {% if app.apply_mode.value == 'portal' %}checked{% endif %}> Lewat situs lowongan</label>
+  </fieldset>
+
+  <div class="grid-2">
+    <label class="field">
+      <span class="label">Kepada</span>
+      <input type="text" name="sent_to" value="{{ app.sent_to or '' }}" placeholder="hr@perusahaan.co.id" autocomplete="off">
+      <span class="hint">{{ 'Dari iklan.' if job.hr_email else 'Iklan tidak mencantumkan email HR. Isi manual bila kamu menemukannya.' }}</span>
+    </label>
+    <label class="field">
+      <span class="label">CV dilampirkan</span>
+      <select name="cv_id">
+        {% for cv in cvs %}<option value="{{ cv.id }}" {% if cv.id == app.cv_id %}selected{% endif %}>{{ cv.title }}</option>{% endfor %}
+        {% if not cvs %}<option value="">Belum ada CV</option>{% endif %}
+      </select>
+    </label>
+  </div>
+
+  <label class="field">
+    <span class="label">Subject</span>
+    <input type="text" name="email_subject" value="{{ app.email_subject or '' }}">
+  </label>
+
+  <fieldset class="row-field">
+    <legend class="label">Bahasa</legend>
+    <label><input type="radio" name="letter_language" value="id" {% if app.letter_language == 'id' %}checked{% endif %}> Indonesia</label>
+    <label><input type="radio" name="letter_language" value="en" {% if app.letter_language == 'en' %}checked{% endif %}> English</label>
+    <span class="hint inline-hint">Ganti bahasa lalu klik "Buat ulang".</span>
+  </fieldset>
+
+  <label class="field">
+    <span class="label">Surat lamaran
+      <span class="meta">· {{ {'ai': 'dibuat ' ~ ai_label, 'template': 'dari template CV', 'manual': 'diedit manual'}.get(app.letter_source or '', '') }}</span>
+    </span>
+    <textarea id="letter" name="cover_letter_text" rows="22" class="letter">{{ app.cover_letter_text }}</textarea>
+  </label>
+</form>
+
+<div id="checks">
+  {% include "partials/review_checks.html" %}
+</div>
+{% endif %}

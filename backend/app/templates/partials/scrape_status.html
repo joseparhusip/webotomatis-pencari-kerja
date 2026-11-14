@@ -1,0 +1,10 @@
+{% if running %}
+<a class="status-chip" href="/settings" hx-get="/scrape/status" hx-trigger="every 15s" hx-target="#scrape-status">
+  <span class="dot dot-info dot-pulse" aria-hidden="true"></span>Scraping<span class="label-long"> berjalan…</span></a>
+{% elif last_scrape %}
+<a class="status-chip" href="/settings" title="Scraping terakhir {{ last_scrape | date_id(true) }}">
+  <span class="dot {{ 'dot-warn' if failed_runs else 'dot-ok' }}" aria-hidden="true"></span>
+  {% if failed_runs %}{{ failed_runs | length }} sumber error{% else %}{{ last_scrape | reltime }}<span class="label-long"> lalu</span>{% endif %}</a>
+{% else %}
+<a class="status-chip" href="/settings"><span class="dot" aria-hidden="true"></span>Belum scraping</a>
+{% endif %}

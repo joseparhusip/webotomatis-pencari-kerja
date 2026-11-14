@@ -1,0 +1,14 @@
+{% set st = app.status.value %}
+{% if st == 'queued' %}
+<p class="flash" hx-get="/applications/{{ app.id }}/status" hx-trigger="every 3s" hx-target="#send-area" hx-swap="innerHTML">
+  ◔ Dalam antrean{% if delay %} · dikirim sekitar {{ delay }} dtk lagi{% endif %}. Halaman ini boleh ditinggal.
+</p>
+{% elif st == 'failed' %}
+<p class="flash flash-err">Gagal mengirim: {{ app.last_error or 'tidak diketahui' }}</p>
+<button class="btn" type="button" hx-post="/applications/{{ app.id }}/send" hx-target="#send-area" hx-swap="innerHTML" hx-disabled-elt="this">Coba kirim lagi</button>
+{% elif st == 'draft' %}
+<p class="flash flash-err">{{ app.last_error or 'Belum dikirim.' }}</p>
+{% else %}
+<p class="flash flash-ok">Terkirim{% if app.sent_to %} ke {{ app.sent_to }}{% endif %}{% if app.sent_at %} · {{ app.sent_at | date_id(true) }}{% endif %}.</p>
+<a class="btn btn-primary" href="/applications">Ke daftar lamaran</a>
+{% endif %}

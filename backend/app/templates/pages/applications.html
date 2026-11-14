@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% from "partials/_macros.html" import logo %}
+{% block title %}Lamaran{% endblock %}
+{% block body %}
+<div class="page">
+  <header class="page-head">
+    <div>
+      <h1>Lamaran</h1>
+      <p class="sub">Semua lamaran dari draft sampai hasil akhir. Ubah status saat HR membalas.</p>
+    </div>
+    <div class="actions">
+      <a class="btn btn-primary" href="/jobs">Pilih lowongan</a>
+    </div>
+  </header>
+
+  {% if request.query_params.get('skipped') %}
+  <p class="banner-warn">{{ request.query_params.get('skipped') }} lowongan dilewati karena sudah pernah dilamar.</p>
+  {% endif %}
+
+  <section class="box stats" aria-label="Ringkasan">
+    <div class="stat">
+      <div class="stat-label">Terkirim · 7 hari</div>
+      <div class="stat-value">{{ stats.sent }}</div>
+      <div class="stat-sub">email + portal</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">Dibalas</div>
+      <div class="stat-value">{{ stats.replied }}</div>
+      <div class="stat-sub">{{ stats.reply_rate }}% dari terkirim</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">Interview / offer</div>
+      <div class="stat-value">{{ stats.interview }}</div>
+      <div class="stat-sub">7 hari terakhir</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">Email hari ini</div>
+      <div class="stat-value">{{ emails_today }}<span class="meta"> / {{ max_emails }}</span></div>
+      <div class="meter {% if emails_today >= max_emails %}is-full{% endif %}" role="img" aria-label="Kuota email terpakai {{ emails_today }} dari {{ max_emails }}">
+        <span style="width: {{ [100, (emails_today * 100 // (max_emails or 1))] | min }}%"></span></div>
+    </div>
+  </section>
+
+  <div class="board" style="grid-template-columns: repeat({{ lanes | length }}, minmax(190px, 1fr));">
+    {% for key, items, dot in lanes %}
+    <section class="lane" aria-label="{{ APP_STATUS_LABELS[key] }}">
+      <header class="lane-h">
+        <span class="dot {{ dot }}" aria-hidden="true"></span>
+        <h2>{{ APP_STATUS_LABELS[key] }}</h2>
+        <span class="num">{{ items | length }}</span>
+      </header>
+      <div class="lane-b">
+        {% for a in items %}
+        <article class="app-card">
+          {% if key == 'draft' %}
+          <a class="job-link" href="/applications/{{ a.id }}/review">{{ a.job.title }}</a>
+          {% else %}
+          <a class="job-link" href="{{ a.job.apply_url }}" target="_blank" rel="noopener">{{ a.job.title }}</a>
+          {% endif %}
+          <div class="sub">{{ a.job.company_name }}</div>
+          <div class="row">
+            <span class="tag">{{ 'email' if a.apply_mode.value == 'email' else 'portal' }}</span>
+            {% if key == 'draft' %}
+              <span class="tag {{ 'tag-ok' if a.cover_letter_text else '' }}">{{ 'surat siap' if a.cover_letter_text else 'surat belum dibuat' }}</span>
+            {% elif a.sent_at %}
+              <span class="meta" title="{{ a.sent_at | date_id(true) }}">{{ a.sent_at | date_id }}</span>
+            {% endif %}
+          </div>
+          {% if a.last_error %}<p class="meta text-danger">▲ {{ a.last_error }}</p>{% endif %}
+          {% if key == 'draft' or key == 'failed' %}
+            <div class="row"><a class="btn-text" href="/applications/{{ a.id }}/review">{{ 'Review & kirim' if key == 'draft' else 'Perbaiki & kirim ulang' }} ›</a></div>
+          {% else %}
+          <form hx-post="/applications/{{ a.id }}/status" hx-trigger="change">
+            <label class="sr-only" for="st-{{ a.id }}">Ubah status</label>
+            <select id="st-{{ a.id }}" name="status" class="select-sm">
+              {% for st in status_options %}
+              <option value="{{ st.value }}" {% if st == a.status %}selected{% endif %}>{{ APP_STATUS_LABELS[st.value] }}</option>
+              {% endfor %}
+            </select>
+          </form>
+          {% endif %}
+        </article>
+        {% else %}
+        <p class="lane-empty">{{ 'Centang lowongan lalu "Siapkan lamaran"' if key == 'draft' else '—' }}</p>
+        {% endfor %}
+      </div>
+    </section>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,195 @@
+{% extends "base.html" %}
+{% block title %}Profil{% endblock %}
+{% block body %}
+<div class="page">
+  <header class="page-head">
+    <div>
+      <h1>Profil</h1>
+      <p class="sub">Data diri, CV, dan bahan surat lamaran. Semua yang dikirim ke HR berasal dari sini.</p>
+    </div>
+  </header>
+
+  {% if ok %}<p class="flash flash-ok" role="status">{{ ok }}</p>{% endif %}
+  {% if err %}<p class="flash flash-err" role="alert">{{ err }}</p>{% endif %}
+
+  <div class="cols-2">
+    <!-- Kolom kiri -->
+    <div class="col-stack">
+      <section id="data" class="box">
+        <header class="box-h"><h2>Data diri</h2><span class="meta">Tanda tangan surat: nama, lalu email · portofolio · LinkedIn. Email juga jadi Reply-To.</span></header>
+        <form method="post" action="/profile" class="box-b">
+          <label class="field"><span class="label">Nama lengkap</span>
+            <input type="text" name="full_name" value="{{ profile.full_name if profile else '' }}" required autocomplete="name"></label>
+          <div class="grid-2">
+            <label class="field"><span class="label">Email</span>
+              <input type="text" inputmode="email" name="email" value="{{ profile.email if profile else '' }}" required autocomplete="email"></label>
+            <label class="field"><span class="label">No. HP / WhatsApp</span>
+              <input type="text" inputmode="tel" name="phone" value="{{ (profile.phone or '') if profile else '' }}" autocomplete="tel">
+              <span class="hint">Tidak dicantumkan di surat lamaran.</span></label>
+          </div>
+          <label class="field"><span class="label">Domisili</span>
+            <input type="text" name="address" value="{{ (profile.address or '') if profile else '' }}" placeholder="mis. Kota Bekasi, Jawa Barat"></label>
+          <div class="grid-2">
+            <label class="field"><span class="label">LinkedIn</span>
+              <input type="text" name="linkedin_url" value="{{ (profile.linkedin_url or '') if profile else '' }}" placeholder="linkedin.com/in/…"></label>
+            <label class="field"><span class="label">Portofolio / GitHub</span>
+              <input type="text" name="portfolio_url" value="{{ (profile.portfolio_url or '') if profile else '' }}" placeholder="github.com/…"></label>
+          </div>
+          <label class="field"><span class="label">Ringkasan</span>
+            <textarea name="summary" rows="4" class="textarea">{{ (profile.summary or '') if profile else '' }}</textarea></label>
+          <label class="field"><span class="label">Skill</span>
+            <input type="text" name="skills" value="{{ (profile.skills or []) | join(', ') if profile else '' }}" placeholder="dipisah koma"></label>
+          <div class="grid-2">
+            <label class="field"><span class="label">Pengalaman kerja (tahun)</span>
+              <input type="number" min="0" max="40" name="experience_years" value="{{ profile.experience_years if profile else 0 }}"></label>
+            <label class="field"><span class="label">Bahasa surat default</span>
+              <select name="preferred_language">
+                <option value="id" {% if not profile or profile.preferred_language == 'id' %}selected{% endif %}>Indonesia</option>
+                <option value="en" {% if profile and profile.preferred_language == 'en' %}selected{% endif %}>English</option>
+              </select></label>
+          </div>
+          <button class="btn btn-primary" type="submit">Simpan data diri</button>
+        </form>
+      </section>
+
+      <section id="surat" class="box">
+        <header class="box-h"><h2>Kalimat surat</h2><span class="meta">Untuk surat template (tanpa AI). Kosongkan untuk melewati.</span></header>
+        <form method="post" action="/profile/letter-texts" class="box-b">
+          <div class="grid-2">
+            <label class="field"><span class="label">Perkenalan · Indonesia</span>
+              <textarea name="intro_id" rows="4" class="textarea">{{ (profile.intro_id or '') if profile else '' }}</textarea></label>
+            <label class="field"><span class="label">Perkenalan · English</span>
+              <textarea name="intro_en" rows="4" class="textarea">{{ (profile.intro_en or '') if profile else '' }}</textarea></label>
+            <label class="field"><span class="label">Kekuatan · Indonesia</span>
+              <textarea name="strength_id" rows="4" class="textarea">{{ (profile.strength_id or '') if profile else '' }}</textarea></label>
+            <label class="field"><span class="label">Kekuatan · English</span>
+              <textarea name="strength_en" rows="4" class="textarea">{{ (profile.strength_en or '') if profile else '' }}</textarea></label>
+          </div>
+          <p class="hint">Perkenalan muncul setelah "Saya ingin melamar posisi …"; kekuatan jadi paragraf sebelum penutup.</p>
+          <button class="btn btn-primary mt" type="submit" {% if not profile %}disabled{% endif %}>Simpan kalimat surat</button>
+        </form>
+      </section>
+    </div>
+
+    <!-- Kolom kanan -->
+    <div class="col-stack">
+      <section id="cv" class="box">
+        <header class="box-h"><h2>CV</h2><span class="meta">CV default dilampirkan di tiap lamaran; CV khusus kategori dipakai otomatis untuk kategori itu.</span></header>
+        <div class="box-b">
+          {% if cvs %}
+          <div class="stack">
+            {% for cv in cvs %}
+            <article class="card">
+              <form method="post" action="/profile/cv/{{ cv.id }}" class="card-row">
+                <label class="field grow"><span class="label">Judul</span>
+                  <input type="text" name="title" value="{{ cv.title }}"></label>
+                <label class="field"><span class="label">Khusus kategori</span>
+                  <select name="role_category">
+                    <option value="">Semua (umum)</option>
+                    {% for c in categories %}<option value="{{ c.value }}" {% if cv.role_category == c %}selected{% endif %}>{{ ROLE_LABELS[c.value] }}</option>{% endfor %}
+                  </select></label>
+                <button class="btn" type="submit">Simpan</button>
+              </form>
+              <p class="meta mt">
+                {% if cv.is_default %}<span class="tag tag-ok">default</span> {% endif %}
+                diunggah {{ cv.created_at | date_id }} ·
+                {% if cv.parsed_text %}{{ cv.parsed_text | length | number_id }} karakter terbaca{% else %}<span class="text-warn">▲ teks tidak terbaca</span>{% endif %}
+              </p>
+              <div class="card-actions">
+                <a href="/profile/cv/{{ cv.id }}/file" target="_blank" rel="noopener">Lihat PDF ↗</a>
+                {% if not cv.is_default %}
+                <form method="post" action="/profile/cv/{{ cv.id }}/default" class="inline"><button class="btn-link" type="submit">Jadikan default</button></form>
+                {% endif %}
+                <span class="spacer"></span>
+                <form method="post" action="/profile/cv/{{ cv.id }}/delete" class="inline" onsubmit="return confirm('Hapus CV ini? File-nya ikut terhapus.')">
+                  <button class="btn-link text-danger" type="submit">Hapus</button></form>
+              </div>
+              {% if cv.parsed_text %}
+              <details class="mt"><summary class="meta">Teks yang terbaca dari PDF{% if ai_ready %} (dibaca AI){% endif %}</summary><pre class="log cv-text">{{ cv.parsed_text[:3000] }}{% if cv.parsed_text | length > 3000 %}
+…{% endif %}</pre></details>
+              {% endif %}
+            </article>
+            {% endfor %}
+          </div>
+          {% else %}
+          <p class="empty-inline">Belum ada CV. Lamaran via email butuh CV untuk dilampirkan.</p>
+          {% endif %}
+
+          <form method="post" action="/profile/cv" enctype="multipart/form-data" class="upload">
+            <h3>Unggah CV baru</h3>
+            <div class="card-row">
+              <label class="field grow"><span class="label">File PDF (maks. 5 MB)</span>
+                <input type="file" name="file" accept="application/pdf,.pdf" required></label>
+              <label class="field grow"><span class="label">Judul</span>
+                <input type="text" name="title" placeholder="mis. CV Mobile Developer"></label>
+              <button class="btn" type="submit">Unggah</button>
+            </div>
+          </form>
+        </div>
+      </section>
+
+      <section id="bukti" class="box">
+        <header class="box-h">
+          <h2>Bukti CV</h2>
+          <span class="meta">Pencapaian konkret yang dipilih otomatis per lowongan (3–4 paling cocok). Tulis dengan angka dan teknologi.</span>
+        </header>
+        <div class="box-b">
+          {% if not evidence %}
+          <div class="empty">
+            <p>Belum ada bukti tersimpan di profil.</p>
+            <p class="meta">Surat template sementara memakai {{ default_evidence_count }} contoh bawaan dari CV. Salin supaya bisa diedit.</p>
+            <form method="post" action="/profile/evidence/import-defaults"><button class="btn" type="submit" {% if not profile %}disabled{% endif %}>Salin contoh bawaan</button></form>
+          </div>
+          {% else %}
+          <div class="stack">
+            {% for ev in evidence %}
+            <details id="bukti-{{ ev.id }}" class="card evidence {% if not ev.is_active %}is-off{% endif %}">
+              <summary>
+                <span class="ev-text">{{ ev.text_id }}</span>
+                <span class="meta">{% for c in ev.categories %}{{ ROLE_LABELS.get(c, c) }}{% if not loop.last %}, {% endif %}{% else %}tanpa kategori{% endfor %} · {{ ev.skills | join(', ') or 'tanpa skill' }}{% if not ev.is_active %} · <span class="text-warn">nonaktif</span>{% endif %}</span>
+              </summary>
+              <form method="post" action="/profile/evidence/{{ ev.id }}">
+                <label class="field"><span class="label">Bukti · Indonesia</span>
+                  <textarea name="text_id" rows="3" class="textarea" required>{{ ev.text_id }}</textarea></label>
+                <label class="field"><span class="label">Bukti · English</span>
+                  <textarea name="text_en" rows="3" class="textarea">{{ ev.text_en or '' }}</textarea></label>
+                <fieldset class="row-field"><legend class="label">Cocok untuk kategori</legend>
+                  {% for c in categories %}<label><input type="checkbox" name="categories" value="{{ c.value }}" {% if c.value in ev.categories %}checked{% endif %}> {{ ROLE_LABELS[c.value] }}</label>{% endfor %}
+                </fieldset>
+                <label class="field"><span class="label">Skill terkait</span>
+                  <input type="text" name="skills" value="{{ ev.skills | join(', ') }}">
+                  <span class="hint">Dipisah koma. Dicocokkan dengan skill lowongan (mis. Go, PostgreSQL, Flutter).</span></label>
+                <label class="check-line"><input type="checkbox" name="is_active" {% if ev.is_active %}checked{% endif %}> Aktif dipakai di surat</label>
+                <div class="card-actions">
+                  <button class="btn" type="submit">Simpan</button>
+                  <span class="spacer"></span>
+                  <button class="btn-link text-danger" type="submit" formaction="/profile/evidence/{{ ev.id }}/delete" formnovalidate
+                          onclick="return confirm('Hapus bukti ini?')">Hapus</button>
+                </div>
+              </form>
+            </details>
+            {% endfor %}
+          </div>
+          {% endif %}
+
+          <details class="upload">
+            <summary><span class="btn-link">+ Tambah bukti</span></summary>
+            <form method="post" action="/profile/evidence">
+              <label class="field"><span class="label">Bukti · Indonesia</span>
+                <textarea name="text_id" rows="3" class="textarea" required placeholder="Di PT …, saya membangun … dengan … sehingga …"></textarea></label>
+              <label class="field"><span class="label">Bukti · English (opsional)</span>
+                <textarea name="text_en" rows="3" class="textarea"></textarea></label>
+              <fieldset class="row-field"><legend class="label">Cocok untuk kategori</legend>
+                {% for c in categories %}<label><input type="checkbox" name="categories" value="{{ c.value }}"> {{ ROLE_LABELS[c.value] }}</label>{% endfor %}
+              </fieldset>
+              <label class="field"><span class="label">Skill terkait</span>
+                <input type="text" name="skills" placeholder="Go, PostgreSQL, Docker"></label>
+              <button class="btn" type="submit" {% if not profile %}disabled{% endif %}>Tambah bukti</button>
+            </form>
+          </details>
+        </div>
+      </section>
+    </div>
+  </div>
+</div>
+{% endblock %}
