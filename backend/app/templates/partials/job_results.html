@@ -1,4 +1,5 @@
-{% from "partials/_macros.html" import logo %}
+{% from "partials/_macros.html" import logo, source_checks %}
+{% if oob_sources %}{{ source_checks(source_options, f, oob=true) }}{% endif %}
 <div class="results-head">
   <h1>Lowongan</h1>
   <p class="summary">

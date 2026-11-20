@@ -388,3 +388,4 @@ textarea.letter { width: 100%; padding: 14px 16px; font: 400 15px/24px var(--ser
 .cv-points { margin: 4px 0 0; padding-left: 18px; color: var(--ink-2); }
 .cv-points li { margin: 2px 0; }
 .model-checks { display: block; max-height: 180px; overflow-y: auto; border: 1px solid var(--line); border-radius: 4px; padding: 8px 8px 0; }
+.src-total { opacity: .6; }

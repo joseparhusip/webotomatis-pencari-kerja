@@ -82,7 +82,7 @@ async def jobs_page(
         "total": total,
         "page_size": PAGE_SIZE,
         "counts": await job_counts(session),
-        "source_options": await source_counts(session),
+        "source_options": await source_counts(session, f),
         "outside": (await search_outside_filters(session, f.q)) if f.q and total == 0 else 0,
         "outside_url": "/jobs?" + urlencode([("f", "1"), ("q", f.q), ("loc", ""), ("posted", "")]
                                            + [("status", s) for s in ("new", "seen", "saved", "applied")]),
@@ -90,7 +90,9 @@ async def jobs_page(
         "next_url": f"/jobs?{urlencode(f.to_query(page=f.page + 1))}" if f.page * PAGE_SIZE < total else None,
         **await shell_context(session),
     }
-    template = "partials/job_results.html" if _is_htmx(request, "job-results") else "pages/jobs.html"
+    partial = _is_htmx(request, "job-results")
+    ctx["oob_sources"] = partial  # angka per sumber di panel filter ikut diperbarui
+    template = "partials/job_results.html" if partial else "pages/jobs.html"
     return templates.TemplateResponse(request, template, ctx)
 
 

@@ -7,3 +7,14 @@
   {%- else -%}{{ name | initials }}{%- endif -%}
 </span>
 {%- endmacro %}
+
+
+{% macro source_checks(source_options, f, oob=false) %}
+<div id="source-checks" class="checks checks-1"{% if oob %} hx-swap-oob="true"{% endif %}>
+  {% for name, n, total in source_options %}
+  <label title="{{ n | number_id }} cocok filter saat ini dari {{ total | number_id }} lowongan aktif">
+    <input type="checkbox" name="source" value="{{ name }}" form="filter-form" {% if name in f.sources %}checked{% endif %}>
+    {{ SOURCE_LABELS.get(name, name) }} <span class="meta">{{ n | number_id }}{% if n != total %} <span class="src-total">/ {{ total | number_id }}</span>{% endif %}</span></label>
+  {% endfor %}
+</div>
+{% endmacro %}

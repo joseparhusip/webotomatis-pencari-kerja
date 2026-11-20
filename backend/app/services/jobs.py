@@ -1,6 +1,6 @@
 """Query daftar lowongan + filter. Dipakai router web (dan nanti router /api)."""
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime, timedelta
 
 import re
@@ -196,14 +196,27 @@ async def all_sources(session: AsyncSession) -> list[Source]:
     return list(await session.scalars(select(Source).order_by(Source.name)))
 
 
-async def source_counts(session: AsyncSession) -> list[tuple[str, int]]:
-    """(nama sumber, jumlah lowongan aktif) untuk pilihan filter Sumber."""
+async def source_counts(session: AsyncSession, f: JobFilters | None = None) -> list[tuple[str, int, int]]:
+    """(nama sumber, jumlah yang cocok filter lain, jumlah lowongan aktif) untuk pilihan filter Sumber.
+
+    Angka pertama memakai semua filter yang sedang aktif kecuali filter Sumber itu sendiri, jadi
+    sama dengan jumlah yang muncul di daftar bila sumber itu dicentang.
+    """
     now = datetime.now(UTC)
-    rows = await session.execute(
+    totals = dict((await session.execute(
         select(Source.name, func.count(func.distinct(JobListing.job_id)))
         .join(JobListing, JobListing.source_id == Source.id)
         .join(Job, Job.id == JobListing.job_id)
         .where(or_(Job.expires_at.is_(None), Job.expires_at >= now))
-        .group_by(Source.name).order_by(Source.name)
-    )
-    return [(name, n) for name, n in rows.all()]
+        .group_by(Source.name)
+    )).all())
+    matching = totals
+    if f is not None:
+        jobs = build_query(replace(f, sources=[], page=1)).subquery()
+        matching = dict((await session.execute(
+            select(Source.name, func.count(func.distinct(JobListing.job_id)))
+            .join(JobListing, JobListing.source_id == Source.id)
+            .join(jobs, jobs.c.id == JobListing.job_id)
+            .group_by(Source.name)
+        )).all())
+    return [(name, matching.get(name, 0), total) for name, total in sorted(totals.items())]

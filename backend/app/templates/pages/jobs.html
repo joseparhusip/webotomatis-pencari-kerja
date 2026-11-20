@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "partials/_macros.html" import source_checks %}
 {% block title %}Lowongan{% endblock %}
 {% block body %}
 <div class="layout">
@@ -57,7 +58,16 @@
 
         <label class="field">
           <span class="label">Gaji minimum / bulan</span>
-          <input type="text" inputmode="numeric" name="salary_min" value="{{ f.salary_min or '' }}" placeholder="mis. 6000000">
+          {% set salary_steps = [3, 4, 5, 6, 7, 8, 10, 12, 15, 20, 25, 30] %}
+          <select name="salary_min">
+            <option value="" {% if not f.salary_min %}selected{% endif %}>Semua gaji</option>
+            {% if f.salary_min and (f.salary_min % 1000000 != 0 or (f.salary_min // 1000000) not in salary_steps) %}
+            <option value="{{ f.salary_min }}" selected>≥ Rp {{ f.salary_min | number_id }}</option>
+            {% endif %}
+            {% for jt in salary_steps %}
+            <option value="{{ jt * 1000000 }}" {% if f.salary_min == jt * 1000000 %}selected{% endif %}>≥ Rp {{ jt }} juta</option>
+            {% endfor %}
+          </select>
           <span class="hint">Lowongan tanpa info gaji tetap ditampilkan.</span>
         </label>
 
@@ -77,13 +87,8 @@
 
         <fieldset>
           <legend class="label">Sumber lowongan</legend>
-          <div class="checks checks-1">
-            {% for name, n in source_options %}
-            <label><input type="checkbox" name="source" value="{{ name }}" {% if name in f.sources %}checked{% endif %}>
-              {{ SOURCE_LABELS.get(name, name) }} <span class="meta">{{ n | number_id }}</span></label>
-            {% endfor %}
-          </div>
-          <span class="hint">Tidak ada yang dicentang = semua sumber.</span>
+          {{ source_checks(source_options, f) }}
+          <span class="hint">Angka kiri = cocok dengan filter lain saat ini; angka kanan = semua lowongan aktif. Tidak ada yang dicentang = semua sumber.</span>
         </fieldset>
 
         <fieldset>
