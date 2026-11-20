@@ -72,6 +72,28 @@ async def tracker_page(request: Request, session: AsyncSession = Depends(get_ses
     return templates.TemplateResponse(request, "pages/applications.html", ctx)
 
 
+@router.get("/export.xlsx")
+async def export_xlsx(session: AsyncSession = Depends(get_session)):
+    """Rekap semua lamaran (termasuk draft) sebagai file Excel berisi ringkasan, analisis & grafik."""
+    from datetime import UTC, datetime
+
+    from sqlalchemy import select
+    from sqlalchemy.orm import selectinload
+
+    from app.models import Job
+    from app.web.export import WIB, build_workbook
+
+    apps = list(await session.scalars(
+        select(Application).options(selectinload(Application.job).selectinload(Job.listings))
+        .order_by(Application.sent_at.desc().nulls_last(), Application.id.desc())
+    ))
+    now = datetime.now(UTC)
+    data = build_workbook(apps, now)
+    name = f"rekap-lamaran-{now.astimezone(WIB):%Y-%m-%d}.xlsx"
+    return Response(data, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    headers={"Content-Disposition": f'attachment; filename="{name}"'})
+
+
 @router.post("/prepare")
 async def prepare(request: Request, session: AsyncSession = Depends(get_session)):
     form = await request.form()
