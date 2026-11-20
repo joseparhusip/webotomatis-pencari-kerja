@@ -69,7 +69,7 @@
         <label class="field">
           <span class="label">Diposting</span>
           <select name="posted">
-            {% for val, text in [(1, '24 jam terakhir'), (3, '3 hari terakhir'), (7, '7 hari terakhir'), (14, '14 hari terakhir'), (30, '30 hari terakhir'), ('', 'Kapan saja')] %}
+            {% for val, text in [(1, '24 jam terakhir'), (2, '2 hari terakhir'), (3, '3 hari terakhir'), (7, '7 hari terakhir'), (14, '14 hari terakhir'), (30, '30 hari terakhir'), ('', 'Kapan saja')] %}
             <option value="{{ val }}" {% if (f.posted_days or '') == val %}selected{% endif %}>{{ text }}</option>
             {% endfor %}
           </select>

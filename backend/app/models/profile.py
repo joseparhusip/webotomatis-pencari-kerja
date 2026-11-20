@@ -1,5 +1,5 @@
 from sqlalchemy import ForeignKey, Integer, String, Text
-from sqlalchemy.dialects.postgresql import ARRAY
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base, TimestampMixin, str_enum
@@ -44,6 +44,8 @@ class LetterEvidence(TimestampMixin, Base):
     skills: Mapped[list[str]] = mapped_column(ARRAY(String(60)), default=list)
     position: Mapped[int] = mapped_column(Integer, default=0)
     is_active: Mapped[bool] = mapped_column(default=True)
+    # True = dibuat otomatis dari scan CV (diganti saat CV utama berganti); False = ditulis manual.
+    from_cv: Mapped[bool] = mapped_column(default=False, server_default="false")
 
 
 class CvDocument(TimestampMixin, Base):
@@ -56,3 +58,5 @@ class CvDocument(TimestampMixin, Base):
     file_path: Mapped[str] = mapped_column(String(500))
     parsed_text: Mapped[str | None] = mapped_column(Text)
     is_default: Mapped[bool] = mapped_column(default=False)
+    # Hasil scan CV (data diri, pengalaman, proyek, pendidikan, bukti, kalimat surat) — lihat services/cv_scan.py
+    scan_data: Mapped[dict | None] = mapped_column(JSONB)

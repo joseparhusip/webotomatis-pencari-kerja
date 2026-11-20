@@ -9,6 +9,7 @@ from app.core.config import get_settings
 from app.core.db import get_session
 from app.models import CvDocument, LetterEvidence, UserProfile
 from app.models.enums import RoleCategory
+from app.services import cv_scan
 from app.services import profile as svc
 from app.services.letter_template import DEFAULT_EVIDENCE
 from app.web.shell import shell_context
@@ -35,10 +36,14 @@ def _url(value: str) -> str | None:
 async def profile_page(request: Request, session: AsyncSession = Depends(get_session)):
 
     profile = await svc.get_profile(session)
+    cvs = await svc.list_cvs(session)
+    main_cv = next((c for c in cvs if c.is_default), None)
     ctx = {
         "active": "profile",
         "profile": profile,
-        "cvs": await svc.list_cvs(session),
+        "cvs": cvs,
+        "main_cv": main_cv,
+        "cv_scan": cv_scan.CvScan.from_data(main_cv.scan_data) if main_cv and main_cv.scan_data else None,
         "evidence": await svc.list_evidence(session),
         "default_evidence_count": len(DEFAULT_EVIDENCE),
         "categories": CATEGORIES,
@@ -117,22 +122,86 @@ async def _cv(session: AsyncSession, cv_id: int) -> CvDocument:
     return cv
 
 
+def _scan_message(scan: cv_scan.CvScan, changed: list[str] | None) -> str:
+    how = {"gemini": "dibaca Gemini", "anthropic": "dibaca Claude"}.get(scan.method, "dibaca pola sederhana")
+    parts = []
+    if changed is not None:
+        parts.append(f"Profil diperbarui dari CV ({how}): {', '.join(changed)}." if changed
+                     else f"Profil sudah sesuai CV ({how}).")
+    if not scan.text:
+        parts.append("Teks CV tidak terbaca, AI surat tidak bisa memakainya.")
+    if scan.note:
+        parts.append(scan.note)
+    return " ".join(parts)
+
+
+async def _scan_file(cv: CvDocument) -> cv_scan.CvScan:
+    path = svc.cv_path(cv)
+    try:
+        text_layer = svc.extract_pdf_text(path)
+    except Exception:
+        text_layer = ""
+    scan = await cv_scan.scan_cv(path.read_bytes(), text_layer)
+    cv.parsed_text = scan.text or cv.parsed_text
+    cv.scan_data = scan.to_data()
+    return scan
+
+
+def _done(profile: UserProfile, msg: str) -> RedirectResponse:
+    if not profile.full_name or not profile.email:
+        return _back("data", msg + " Lengkapi nama & email di Data diri.", error=True)
+    return _back("data", msg)
+
+
 @router.post("/cv")
 async def upload_cv(
     session: AsyncSession = Depends(get_session),
     file: UploadFile = File(...),
     title: str = Form(""),
+    make_active: str = Form(""),
+    replace_old: str = Form(""),
 ):
-    profile = await svc.get_profile(session)
-    if profile is None:
-        return _back("data", "Isi data diri dulu sebelum upload CV.", error=True)
     data = await file.read(svc.MAX_CV_BYTES + 1)
+    profile = await svc.get_profile(session)
+    created = profile is None
+    if created:  # CV pertama boleh diunggah sebelum data diri diisi — profil dibuat dari CV
+        profile = UserProfile(full_name="", email="", skills=[])
+        session.add(profile)
+        await session.flush()
     try:
         cv = await svc.save_uploaded_cv(session, profile, file.filename or "cv.pdf", data, title)
     except svc.ProfileError as exc:
+        await session.rollback()
         return _back("cv", str(exc), error=True)
-    note = "" if cv.parsed_text else " Teksnya tidak terbaca (PDF hasil scan?), AI tidak bisa memakainya."
-    return _back("cv", f"CV \"{cv.title}\" terunggah.{note}")
+
+    scan = await cv_scan.scan_cv(data, cv.parsed_text or "")
+    cv.parsed_text = scan.text or None
+    cv.scan_data = scan.to_data()
+    activate = created or make_active == "on" or replace_old == "on"
+    changed = await svc.sync_profile_from_cv(session, profile, cv) if activate else None
+    await session.commit()
+
+    msg = f"CV \"{cv.title}\" tersimpan di storage{' dan jadi CV utama' if activate else ''}. "
+    if replace_old == "on":
+        deleted, skipped = await svc.replace_old_cvs(session, cv)
+        if deleted:
+            msg += f"CV lama dihapus: {', '.join(deleted)}. "
+        if skipped:
+            msg += f"Tidak dihapus karena dipakai lamaran di antrean: {', '.join(skipped)}. "
+    return _done(profile, msg + _scan_message(scan, changed))
+
+
+@router.post("/cv/{cv_id}/scan")
+async def rescan_cv(cv_id: int, session: AsyncSession = Depends(get_session)):
+    """Baca ulang CV (OCR/AI). Bila CV ini CV utama, Profil ikut diperbarui."""
+    cv = await _cv(session, cv_id)
+    profile = await svc.get_profile(session)
+    if profile is None or not svc.cv_path(cv).is_file():
+        return _back("cv", "File CV tidak ada di storage.", error=True)
+    scan = await _scan_file(cv)
+    changed = await svc.sync_profile_from_cv(session, profile, cv) if cv.is_default else None
+    await session.commit()
+    return _done(profile, f"CV \"{cv.title}\" dipindai ulang. " + _scan_message(scan, changed))
 
 
 @router.post("/cv/{cv_id}")
@@ -151,9 +220,20 @@ async def update_cv(
 
 @router.post("/cv/{cv_id}/default")
 async def make_default(cv_id: int, session: AsyncSession = Depends(get_session)):
+    """Pakai CV ini: jadi CV utama dan Profil diperbarui sesuai isinya."""
     cv = await _cv(session, cv_id)
-    await svc.set_default_cv(session, cv)
-    return _back("cv", f"\"{cv.title}\" jadi CV default.")
+    profile = await svc.get_profile(session)
+    if profile is None:
+        return _back("data", "Isi data diri dulu.", error=True)
+    scan = None
+    if not cv.scan_data and svc.cv_path(cv).is_file():  # CV lama yang belum pernah dipindai
+        scan = await _scan_file(cv)
+    changed = await svc.sync_profile_from_cv(session, profile, cv)
+    await session.commit()
+    msg = f"\"{cv.title}\" jadi CV utama. "
+    if scan is not None:
+        return _done(profile, msg + _scan_message(scan, changed))
+    return _done(profile, msg + (f"Profil diperbarui: {', '.join(changed)}." if changed else "Profil sudah sesuai CV ini."))
 
 
 @router.post("/cv/{cv_id}/delete")

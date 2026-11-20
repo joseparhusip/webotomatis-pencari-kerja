@@ -52,6 +52,58 @@
         </form>
       </section>
 
+      <section id="riwayat-cv" class="box">
+        <header class="box-h"><h2>Riwayat dari CV</h2><span class="meta">{% if main_cv %}Dibaca dari CV utama "{{ main_cv.title }}". Berubah otomatis saat CV utama diganti.{% else %}Unggah CV untuk mengisi bagian ini.{% endif %}</span></header>
+        <div class="box-b">
+          {% if not cv_scan %}
+          <p class="empty-inline">{% if main_cv %}CV utama belum dipindai. Klik "Pindai ulang" di kartu CV.{% else %}Belum ada CV.{% endif %}</p>
+          {% else %}
+            {% if cv_scan.experiences %}
+            <h3 class="cv-h">Pengalaman</h3>
+            <ul class="cv-list">
+              {% for e in cv_scan.experiences %}
+              <li>
+                <div class="cv-item-h"><strong>{{ e.role or e.company }}</strong>{% if e.role %} · {{ e.company }}{% endif %}{% if e.employment_type %} <span class="tag">{{ e.employment_type }}</span>{% endif %}</div>
+                {% if e.start or e.end or e.location %}<div class="meta">{{ [e.start, e.end] | select | join(' – ') }}{% if e.location %}{% if e.start or e.end %} · {% endif %}{{ e.location }}{% endif %}</div>{% endif %}
+                {% if e.highlights %}<ul class="cv-points">{% for h in e.highlights %}<li>{{ h }}</li>{% endfor %}</ul>{% endif %}
+              </li>
+              {% endfor %}
+            </ul>
+            {% endif %}
+            {% if cv_scan.projects %}
+            <h3 class="cv-h">Proyek</h3>
+            <ul class="cv-list">
+              {% for pr in cv_scan.projects %}
+              <li>
+                <div class="cv-item-h"><strong>{% if pr.url %}<a href="{{ pr.url }}" target="_blank" rel="noopener">{{ pr.name }} ↗</a>{% else %}{{ pr.name }}{% endif %}</strong>{% if pr.role %} · {{ pr.role }}{% endif %}</div>
+                {% if pr.description %}<div>{{ pr.description }}</div>{% endif %}
+                {% if pr.tech %}<div class="meta">{{ pr.tech | join(', ') }}</div>{% endif %}
+              </li>
+              {% endfor %}
+            </ul>
+            {% endif %}
+            {% if cv_scan.education %}
+            <h3 class="cv-h">Pendidikan</h3>
+            <ul class="cv-list">
+              {% for ed in cv_scan.education %}
+              <li>
+                <div class="cv-item-h"><strong>{{ ([ed.degree, ed.major] | select | join(' ')) or ed.institution }}</strong>{% if ed.degree or ed.major %} · {{ ed.institution }}{% endif %}</div>
+                {% if ed.start or ed.end or ed.gpa %}<div class="meta">{{ [ed.start, ed.end] | select | join(' – ') }}{% if ed.gpa %}{% if ed.start or ed.end %} · {% endif %}IPK {{ ed.gpa }}{% endif %}</div>{% endif %}
+              </li>
+              {% endfor %}
+            </ul>
+            {% endif %}
+            {% if cv_scan.certifications %}
+            <h3 class="cv-h">Sertifikasi &amp; penghargaan</h3>
+            <ul class="cv-points">{% for c in cv_scan.certifications %}<li>{{ c }}</li>{% endfor %}</ul>
+            {% endif %}
+            {% if not (cv_scan.experiences or cv_scan.projects or cv_scan.education) %}
+            <p class="empty-inline">Riwayat tidak terbaca{% if cv_scan.method == 'pattern' %} (AI belum aktif){% endif %}.</p>
+            {% endif %}
+          {% endif %}
+        </div>
+      </section>
+
       <section id="surat" class="box">
         <header class="box-h"><h2>Kalimat surat</h2><span class="meta">Untuk surat template (tanpa AI). Kosongkan untuk melewati.</span></header>
         <form method="post" action="/profile/letter-texts" class="box-b">
@@ -91,21 +143,24 @@
                 <button class="btn" type="submit">Simpan</button>
               </form>
               <p class="meta mt">
-                {% if cv.is_default %}<span class="tag tag-ok">default</span> {% endif %}
+                {% if cv.is_default %}<span class="tag tag-ok">CV utama</span> {% endif %}{% if cv.scan_data %}<span class="tag">dipindai {{ {'gemini': 'Gemini', 'anthropic': 'Claude'}.get(cv.scan_data.get('method'), 'pola sederhana') }}</span> {% endif %}
                 diunggah {{ cv.created_at | date_id }} ·
                 {% if cv.parsed_text %}{{ cv.parsed_text | length | number_id }} karakter terbaca{% else %}<span class="text-warn">▲ teks tidak terbaca</span>{% endif %}
               </p>
               <div class="card-actions">
                 <a href="/profile/cv/{{ cv.id }}/file" target="_blank" rel="noopener">Lihat PDF ↗</a>
                 {% if not cv.is_default %}
-                <form method="post" action="/profile/cv/{{ cv.id }}/default" class="inline"><button class="btn-link" type="submit">Jadikan default</button></form>
+                <form method="post" action="/profile/cv/{{ cv.id }}/default" class="inline" onsubmit="if (!confirm('Pakai CV ini sebagai CV utama? Data diri, pengalaman, proyek, bukti CV, dan kalimat surat akan diperbarui sesuai CV ini.')) return false; this.querySelector('button').textContent='Memproses…'">
+                  <button class="btn-link" type="submit">Pakai CV ini</button></form>
                 {% endif %}
+                <form method="post" action="/profile/cv/{{ cv.id }}/scan" class="inline" onsubmit="{% if cv.is_default %}if (!confirm('Pindai ulang CV ini? Profil akan diperbarui dengan hasilnya.')) return false; {% endif %}this.querySelector('button').textContent='Memindai…'">
+                  <button class="btn-link" type="submit">Pindai ulang</button></form>
                 <span class="spacer"></span>
                 <form method="post" action="/profile/cv/{{ cv.id }}/delete" class="inline" onsubmit="return confirm('Hapus CV ini? File-nya ikut terhapus.')">
                   <button class="btn-link text-danger" type="submit">Hapus</button></form>
               </div>
               {% if cv.parsed_text %}
-              <details class="mt"><summary class="meta">Teks yang terbaca dari PDF{% if ai_ready %} (dibaca AI){% endif %}</summary><pre class="log cv-text">{{ cv.parsed_text[:3000] }}{% if cv.parsed_text | length > 3000 %}
+              <details class="mt"><summary class="meta">Teks yang terbaca dari PDF</summary><pre class="log cv-text">{{ cv.parsed_text[:3000] }}{% if cv.parsed_text | length > 3000 %}
 …{% endif %}</pre></details>
               {% endif %}
             </article>
@@ -115,15 +170,19 @@
           <p class="empty-inline">Belum ada CV. Lamaran via email butuh CV untuk dilampirkan.</p>
           {% endif %}
 
-          <form method="post" action="/profile/cv" enctype="multipart/form-data" class="upload">
+          <form method="post" action="/profile/cv" enctype="multipart/form-data" class="upload" onsubmit="var b=this.querySelector('button[type=submit]'); b.disabled=true; b.textContent='Memindai CV…'">
             <h3>Unggah CV baru</h3>
             <div class="card-row">
               <label class="field grow"><span class="label">File PDF (maks. 5 MB)</span>
                 <input type="file" name="file" accept="application/pdf,.pdf" required></label>
               <label class="field grow"><span class="label">Judul</span>
                 <input type="text" name="title" placeholder="mis. CV Mobile Developer"></label>
-              <button class="btn" type="submit">Unggah</button>
+              <button class="btn" type="submit">Unggah &amp; scan</button>
             </div>
+            <label class="check-line"><input type="checkbox" name="make_active" checked> Jadikan CV utama &amp; perbarui profil dari CV ini
+              <span class="meta">(data diri, pengalaman, proyek, pendidikan, bukti CV, kalimat surat)</span></label>
+            {% if cvs %}<label class="check-line"><input type="checkbox" name="replace_old" checked> Hapus CV lama (diganti CV ini)</label>{% endif %}
+            <p class="hint scan-note">File disimpan di folder storage/cv. {% if ai_ready %}CV dibaca AI (PDF hasil scan/foto juga bisa), lalu setiap data dicocokkan ulang dengan isi CV; yang tidak tertulis di CV dibuang. Memindai butuh sekitar 30–90 detik.{% else %}AI belum aktif: hanya PDF berteks yang terbaca, dan hasil isian terbatas. Isi API key di <a href="/settings#konfigurasi">Pengaturan</a>.{% endif %}</p>
           </form>
         </div>
       </section>
@@ -146,7 +205,7 @@
             <details id="bukti-{{ ev.id }}" class="card evidence {% if not ev.is_active %}is-off{% endif %}">
               <summary>
                 <span class="ev-text">{{ ev.text_id }}</span>
-                <span class="meta">{% for c in ev.categories %}{{ ROLE_LABELS.get(c, c) }}{% if not loop.last %}, {% endif %}{% else %}tanpa kategori{% endfor %} · {{ ev.skills | join(', ') or 'tanpa skill' }}{% if not ev.is_active %} · <span class="text-warn">nonaktif</span>{% endif %}</span>
+                <span class="meta">{% for c in ev.categories %}{{ ROLE_LABELS.get(c, c) }}{% if not loop.last %}, {% endif %}{% else %}tanpa kategori{% endfor %} · {{ ev.skills | join(', ') or 'tanpa skill' }}{% if ev.from_cv %} · <span class="tag">dari CV</span>{% endif %}{% if not ev.is_active %} · <span class="text-warn">nonaktif</span>{% endif %}</span>
               </summary>
               <form method="post" action="/profile/evidence/{{ ev.id }}">
                 <label class="field"><span class="label">Bukti · Indonesia</span>

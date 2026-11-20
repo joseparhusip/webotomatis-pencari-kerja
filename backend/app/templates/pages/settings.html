@@ -21,7 +21,7 @@
       <div class="stat-sub">{{ cfg.smtp_user }}</div>
       {% else %}
       <div class="state"><span class="dot dot-warn" aria-hidden="true"></span>Belum diatur</div>
-      <div class="stat-sub">Isi SMTP_USER & SMTP_PASSWORD (Gmail App Password) di .env</div>
+      <div class="stat-sub">Isi email & App Password di <a href="#konfigurasi">Konfigurasi</a></div>
       {% endif %}
     </div>
     <div class="integration">
@@ -31,7 +31,7 @@
       <div class="stat-sub">{{ cfg.model }}</div>
       {% else %}
       <div class="state"><span class="dot" aria-hidden="true"></span>Nonaktif</div>
-      <div class="stat-sub">Memakai template bukti CV. Isi GEMINI_API_KEY untuk AI.</div>
+      <div class="stat-sub">Memakai template bukti CV. Isi API key di <a href="#konfigurasi">Konfigurasi</a>.</div>
       {% endif %}
     </div>
     <div class="integration">
@@ -43,6 +43,58 @@
       <div class="stat-label">Jadwal scraping</div>
       <div class="state">Tiap {{ cfg.interval }} jam</div>
       <div class="stat-sub">{{ connector_names | length }} sumber · 8 keyword · maks. {{ cfg.pages }} halaman</div>
+    </div>
+  </section>
+
+  <section id="konfigurasi" class="box mb" aria-label="Konfigurasi">
+    <header class="box-h">
+      <h2>Konfigurasi</h2>
+      <span class="meta">Isi di sini tanpa mengedit .env. Disimpan di {{ cfg_file }} dan menimpa nilai .env; langsung dipakai web & worker.</span>
+    </header>
+    <div class="box-b">
+      {% if cfg_ok %}<p class="flash flash-ok" role="status">{{ cfg_ok }}</p>{% endif %}
+      {% if cfg_err %}<p class="flash flash-err" role="alert">{{ cfg_err }}</p>{% endif %}
+      <form method="post" action="/settings/config" autocomplete="off">
+        <div class="cfg-groups">
+        {% for g in cfg_groups %}
+          <fieldset class="cfg-group">
+            <legend class="label">{{ g.title }}</legend>
+            {% for r in g.rows %}
+            <label class="field"><span class="label">{{ r.label }}{% if r.from_web %} <span class="tag">web</span>{% endif %}</span>
+              {% if r.kind == 'secret' %}
+              <input type="password" name="{{ r.key }}" value="" placeholder="{{ r.masked + ' (tersimpan) — kosongkan bila tidak diubah' if r.masked else 'belum diisi' }}" autocomplete="new-password">
+              {% elif r.kind == 'int' %}
+              <input type="number" min="0" name="{{ r.key }}" value="{{ r.value }}">
+              {% elif r.kind == 'model' %}
+              <select name="{{ r.key }}">{% for id, name in r.options %}<option value="{{ id }}" {% if id in r.selected %}selected{% endif %}>{{ name }}</option>{% endfor %}</select>
+              {% elif r.kind == 'models' %}
+              <input type="hidden" name="{{ r.key }}__present" value="1">
+              <span class="model-checks">
+                {% for id, name in r.options %}<label class="check-line"><input type="checkbox" name="{{ r.key }}" value="{{ id }}" {% if id in r.selected %}checked{% endif %}> {{ name }}</label>{% endfor %}
+              </span>
+              {% elif r.options %}
+              <select name="{{ r.key }}">{% for o, text in r.options %}<option value="{{ o }}" {% if o == r.value %}selected{% endif %}>{{ text }}</option>{% endfor %}</select>
+              {% else %}
+              <input type="text" name="{{ r.key }}" value="{{ r.value }}">
+              {% endif %}
+              {% if r.hint %}<span class="hint">{{ r.hint }}{% if r.kind == 'model' and not cfg_models_live %} Isi Kunci API Gemini dulu supaya daftar ini sesuai akun kamu.{% endif %}</span>{% endif %}
+            </label>
+            {% if r.kind == 'secret' and r.masked %}
+            <label class="check-line meta"><input type="checkbox" name="{{ r.key }}__clear"> Hapus {{ r.label }}</label>
+            {% endif %}
+            {% endfor %}
+          </fieldset>
+        {% endfor %}
+        </div>
+        <div class="card-actions mt">
+          <button class="btn btn-primary" type="submit">Simpan konfigurasi</button>
+          <span class="spacer"></span>
+          {% if cfg_has_overrides %}
+          <button class="btn-link text-danger" type="submit" formaction="/settings/config/reset" formnovalidate
+                  onclick="return confirm('Hapus semua isian dari web dan kembali ke nilai .env?')">Kembali ke .env</button>
+          {% endif %}
+        </div>
+      </form>
     </div>
   </section>
 

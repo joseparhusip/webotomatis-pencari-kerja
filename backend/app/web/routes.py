@@ -25,6 +25,7 @@ from app.services.jobs import (
 )
 from app.services.details import needs_detail, refresh_job
 from app.services.scraping import SCRAPE_LOCK
+from app.web.config import config_context
 from app.web.shell import shell_context
 from app.web.templating import templates
 
@@ -184,6 +185,9 @@ async def settings_page(request: Request, session: AsyncSession = Depends(get_se
         "ig_reason": REGISTRY["instagram"].disabled_reason(),
         "ig_err": request.query_params.get("ig_err"),
         "ig_ok": request.query_params.get("ig_ok"),
+        "cfg_ok": request.query_params.get("cfg_ok"),
+        "cfg_err": request.query_params.get("cfg_err"),
+        **(await config_context()),
         "runs": runs, "runs_page": runs_page, "runs_pages": runs_pages,
         "cfg": {
             "smtp_ready": s.smtp_ready, "smtp_user": s.smtp_user, "ai_ready": s.ai_ready, "model": s.ai_model, "ai_label": s.ai_label,
