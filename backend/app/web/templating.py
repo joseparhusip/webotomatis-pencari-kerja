@@ -114,6 +114,14 @@ templates.env.filters.update(
     score_class=score_class, number_id=number_id, short_city=short_city, initials=initials,
     exp_text=exp_text, skill_matches=skill_matches,
 )
+
+
+def _duration(seconds: int) -> str:
+    from app.services.scrape_progress import duration_text
+    return duration_text(seconds)
+
+
+templates.env.filters["duration"] = _duration
 from app.services.letter_template import SOURCE_LABELS  # noqa: E402
 
 templates.env.globals.update(

@@ -389,3 +389,35 @@ textarea.letter { width: 100%; padding: 14px 16px; font: 400 15px/24px var(--ser
 .cv-points li { margin: 2px 0; }
 .model-checks { display: block; max-height: 180px; overflow-y: auto; border: 1px solid var(--line); border-radius: 4px; padding: 8px 8px 0; }
 .src-total { opacity: .6; }
+
+/* progres scraping */
+.spinner { width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--line); border-top-color: var(--accent);
+  animation: spin .8s linear infinite; flex: none; display: inline-block; }
+.spinner-sm { width: 9px; height: 9px; border-width: 1.5px; vertical-align: -1px; margin-right: 4px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 2.4s; } }
+.status-chip.is-running { position: relative; overflow: hidden; border-color: var(--accent); color: var(--ink); }
+.chip-bar { position: absolute; left: 0; right: 0; bottom: 0; height: 2px; background: transparent; }
+.chip-bar > span { display: block; height: 100%; background: var(--accent); transition: width .6s ease; }
+.scrape-progress { margin-bottom: 16px; padding: 12px 16px; }
+.scrape-progress.is-live { border-color: var(--accent); }
+.sp-head { display: flex; align-items: center; gap: 10px; }
+.sp-title { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+.sp-meter { margin-top: 10px; height: 6px; border-radius: 3px; }
+.sp-meter > span { transition: width .6s ease; }
+.sp-rows { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 6px; }
+.sp-row { display: grid; grid-template-columns: 110px 1fr 120px 170px; gap: 10px; align-items: center; font-size: 13px; }
+.sp-name { font-weight: 600; }
+.sp-phase { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sp-bar { height: 4px; background: var(--surface-2); border-radius: 2px; overflow: hidden; }
+.sp-bar > span { display: block; height: 100%; background: var(--accent); transition: width .6s ease; }
+.sp-row.is-done .sp-bar > span { background: var(--ok); }
+.sp-row.is-error .sp-bar > span { background: var(--danger); }
+.sp-row.is-skipped, .sp-row.is-waiting { color: var(--ink-3); }
+.sp-row.is-skipped .sp-bar > span { background: var(--line); }
+.sp-num { text-align: right; white-space: nowrap; }
+@media (max-width: 720px) {
+  .sp-row { grid-template-columns: 90px 1fr; }
+  .sp-bar, .sp-num { grid-column: 2; }
+  .sp-num { text-align: left; }
+}

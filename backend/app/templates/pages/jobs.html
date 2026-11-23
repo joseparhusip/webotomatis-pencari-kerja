@@ -120,6 +120,7 @@
       <button class="btn" type="button" data-clear-selection>Batal pilih</button>
       <button class="btn btn-primary" type="submit">Siapkan lamaran</button>
     </form>
+    {% with compact = true %}{% include "partials/scrape_progress.html" %}{% endwith %}
     <div id="job-results" hx-get="/jobs" hx-include="#filter-form" hx-trigger="jobs-changed from:body">
       {% include "partials/job_results.html" %}
     </div>

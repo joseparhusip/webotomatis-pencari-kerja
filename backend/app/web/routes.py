@@ -89,6 +89,7 @@ async def jobs_page(
         "prev_url": f"/jobs?{urlencode(f.to_query(page=f.page - 1))}" if f.page > 1 else None,
         "next_url": f"/jobs?{urlencode(f.to_query(page=f.page + 1))}" if f.page * PAGE_SIZE < total else None,
         **await shell_context(session),
+        **await progress_ctx(request),
     }
     partial = _is_htmx(request, "job-results")
     ctx["oob_sources"] = partial  # angka per sumber di panel filter ikut diperbarui
@@ -146,23 +147,62 @@ async def set_job_status(
     return resp
 
 
+async def progress_ctx(request: Request) -> dict:
+    """Progres scraping dari Redis (ditulis worker) untuk chip topbar & panel progres."""
+    from datetime import UTC, datetime
+
+    from app.services.scrape_progress import read_progress, summarize
+
+    pool = getattr(request.app.state, "arq", None)
+    if pool is None:
+        return {"prog": None, "now": datetime.now(UTC)}
+    try:
+        lock = bool(await pool.exists(SCRAPE_LOCK))
+    except Exception:
+        lock = False
+    return {"prog": summarize(await read_progress(pool), lock), "now": datetime.now(UTC)}
+
+
 @router.post("/scrape", response_class=HTMLResponse)
 async def trigger_scrape(request: Request):
+    import json
+
+    from app.connectors import REGISTRY
+    from app.services.letter_template import SOURCE_LABELS
+    from app.services.scrape_progress import PROGRESS_KEY, PROGRESS_TTL, new_state
+
     pool = getattr(request.app.state, "arq", None)
     if pool is None:
         msg, ok = "Gagal: worker/Redis tidak terhubung. Jalankan `docker compose up worker redis`.", False
     elif await pool.exists(SCRAPE_LOCK):
-        msg, ok = "Scraping sedang berjalan. Hasilnya muncul di riwayat begitu selesai.", True
+        msg, ok = "Scraping sedang berjalan — lihat progresnya di bawah.", True
     else:
-        job = await pool.enqueue_job("scrape_all_task", _job_id="scrape-all-manual")
-        msg, ok = (("Scraping dijadwalkan. Hasil muncul dalam beberapa menit.", True) if job
+        # Langsung tampilkan "Memulai…" sebelum worker mengambil tugasnya.
+        state = new_state("manual", {n: SOURCE_LABELS.get(n, n) for n in REGISTRY}, state="queued")
+        await pool.set(PROGRESS_KEY, json.dumps(state), ex=PROGRESS_TTL)
+        job = await pool.enqueue_job("scrape_all_task", "manual", _job_id="scrape-all-manual")
+        msg, ok = (("Scraping dimulai. Progresnya tampil langsung di bawah & di pojok kanan atas.", True) if job
                    else ("Scraping sudah berjalan.", True))
-    return templates.TemplateResponse(request, "partials/flash.html", {"msg": msg, "ok": ok})
+    resp = templates.TemplateResponse(request, "partials/flash.html", {"msg": msg, "ok": ok})
+    resp.headers["HX-Trigger"] = "scrape-started"
+    return resp
 
 
 @router.get("/scrape/status", response_class=HTMLResponse)
 async def scrape_status(request: Request, session: AsyncSession = Depends(get_session)):
-    return templates.TemplateResponse(request, "partials/scrape_status.html", await shell_context(session))
+    ctx = {**await shell_context(session), **await progress_ctx(request)}
+    resp = templates.TemplateResponse(request, "partials/scrape_status.html", ctx)
+    prog = ctx["prog"]
+    if request.query_params.get("was") and not (prog and prog["state"] in ("queued", "running")):
+        # Baru saja selesai: segarkan daftar lowongan & panel progres.
+        resp.headers["HX-Trigger"] = "scrape-finished, jobs-changed"
+    return resp
+
+
+@router.get("/scrape/progress", response_class=HTMLResponse)
+async def scrape_progress(request: Request):
+    ctx = {**await progress_ctx(request), "compact": bool(request.query_params.get("compact"))}
+    return templates.TemplateResponse(request, "partials/scrape_progress.html", ctx)
 
 
 @router.get("/settings", response_class=HTMLResponse)
@@ -198,6 +238,7 @@ async def settings_page(request: Request, session: AsyncSession = Depends(get_se
             "gap": s.min_seconds_between_emails,
         },
         **await shell_context(session),
+        **await progress_ctx(request),
     }
     return templates.TemplateResponse(request, "pages/settings.html", ctx)
 

@@ -14,11 +14,13 @@ from app.core.config import get_settings
 from app.models import Job, JobListing, Source
 from app.models.enums import JobStatus
 from app.services.ingest import rescore
+from app.services.targeting import IT_CATEGORIES
 
 log = logging.getLogger(__name__)
 
 REFRESH_AFTER = timedelta(hours=48)  # detail diperbarui berkala: iklan bisa diedit/ditutup perusahaan
 PER_RUN_LIMIT = 400                 # per sumber per scraping (JobStreet kategori IT bisa ratusan per 3 hari)
+DETAIL_CONCURRENCY = 3              # halaman detail yang diambil bersamaan per situs (tetap ada jeda per jalur)
 
 
 def apply_detail(job: Job, listing: JobListing, d: JobDetail, now: datetime) -> None:
@@ -53,14 +55,28 @@ async def fetch_for_listing(
     session: AsyncSession, client: httpx.AsyncClient, connector: Connector, listing: JobListing
 ) -> bool:
     """Ambil & terapkan detail satu listing. True bila berhasil."""
+    return await _store(session, connector, listing, await _download(client, connector, listing))
+
+
+_FETCH_ERRORS = (httpx.HTTPError, ValueError, KeyError, TypeError)
+
+
+async def _download(client: httpx.AsyncClient, connector: Connector, listing: JobListing):
+    """Hanya HTTP (aman dijalankan paralel). Hasil: JobDetail | None | exception."""
+    try:
+        return await connector.fetch_detail(client, listing.url, listing.external_id, listing.raw_payload or {})
+    except _FETCH_ERRORS as exc:
+        return exc
+
+
+async def _store(session: AsyncSession, connector: Connector, listing: JobListing, detail) -> bool:
+    """Simpan hasil _download ke DB (berurutan, satu session). True bila berhasil."""
     job = await session.get(Job, listing.job_id)
     now = datetime.now(UTC)
-    try:
-        detail = await connector.fetch_detail(client, listing.url, listing.external_id, listing.raw_payload or {})
-    except (httpx.HTTPError, ValueError, KeyError, TypeError) as exc:
+    if isinstance(detail, Exception):
         listing.detail_fetched_at = now  # dicoba lagi setelah REFRESH_AFTER
-        listing.detail_error = f"{type(exc).__name__}: {exc}"[:500]
-        log.warning("detail %s %s gagal: %s", connector.name, listing.external_id, exc)
+        listing.detail_error = f"{type(detail).__name__}: {detail}"[:500]
+        log.warning("detail %s %s gagal: %s", connector.name, listing.external_id, detail)
         await session.commit()
         return False
     if detail is not None:
@@ -91,7 +107,7 @@ def needs_detail(job: Job) -> bool:
 
 
 async def backfill(session: AsyncSession, source: Source, connector: Connector,
-                   client: httpx.AsyncClient, limit: int = PER_RUN_LIMIT) -> tuple[int, int]:
+                   client: httpx.AsyncClient, limit: int = PER_RUN_LIMIT, on_progress=None) -> tuple[int, int]:
     """Lengkapi listing yang belum punya detail / detailnya sudah lama. Kembalikan (berhasil, gagal)."""
     if not connector.supports_detail:
         return 0, 0
@@ -100,7 +116,9 @@ async def backfill(session: AsyncSession, source: Source, connector: Connector,
         select(JobListing).join(Job, Job.id == JobListing.job_id)
         .where(
             JobListing.source_id == source.id,
-            or_(JobListing.detail_fetched_at.is_(None), JobListing.detail_fetched_at < now - REFRESH_AFTER),
+            # Lowongan baru selalu dilengkapi; pembaruan berkala hanya untuk lowongan IT (yang ditampilkan).
+            or_(JobListing.detail_fetched_at.is_(None),
+                (JobListing.detail_fetched_at < now - REFRESH_AFTER) & Job.role_category.in_(list(IT_CATEGORIES))),
             or_(Job.expires_at.is_(None), Job.expires_at > now),
             Job.status != JobStatus.HIDDEN,
         )
@@ -108,10 +126,23 @@ async def backfill(session: AsyncSession, source: Source, connector: Connector,
         .limit(limit)
     ))
     ok = fail = 0
-    for listing in rows:
-        if await fetch_for_listing(session, client, connector, listing):
+    if on_progress and rows:
+        await on_progress(0, len(rows))
+    sem = asyncio.Semaphore(DETAIL_CONCURRENCY)
+
+    async def download(listing: JobListing):
+        async with sem:
+            result = await _download(client, connector, listing)
+            await asyncio.sleep(connector.detail_delay_seconds)  # jeda sopan per jalur
+            return listing, result
+
+    # HTTP berjalan paralel; penyimpanan ke DB tetap berurutan di loop ini (satu session).
+    for i, task in enumerate(asyncio.as_completed([download(r) for r in rows]), 1):
+        listing, result = await task
+        if await _store(session, connector, listing, result):
             ok += 1
         else:
             fail += 1
-        await asyncio.sleep(connector.detail_delay_seconds)
+        if on_progress:
+            await on_progress(i, len(rows))
     return ok, fail

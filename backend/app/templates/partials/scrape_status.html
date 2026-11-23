@@ -1,6 +1,17 @@
-{% if running %}
-<a class="status-chip" href="/settings" hx-get="/scrape/status" hx-trigger="every 15s" hx-target="#scrape-status">
-  <span class="dot dot-info dot-pulse" aria-hidden="true"></span>Scraping<span class="label-long"> berjalan…</span></a>
+{% set live = prog and prog.state in ('queued', 'running') %}
+<div id="scrape-status" hx-get="/scrape/status{% if live %}?was=1{% endif %}" hx-swap="outerHTML"
+     hx-trigger="{% if live %}every 3s{% else %}{% if prog is not defined %}load, {% endif %}every 30s, scrape-started from:body{% endif %}">
+{% if live %}
+<a class="status-chip is-running" href="/settings#progres-scraping"
+   title="{% if prog.state == 'queued' %}Menunggu worker memulai scraping{% else %}{{ prog.done_count }} dari {{ prog.total_count }} sumber selesai{% if prog.running_names %} · sedang: {{ prog.running_names | join(', ') }}{% endif %}{% endif %}">
+  <span class="spinner" aria-hidden="true"></span>
+  {% if prog.state == 'queued' %}Memulai<span class="label-long"> scraping…</span>
+  {% else %}Scraping <span class="num">{{ prog.percent }}%</span><span class="label-long"> · {{ prog.done_count }}/{{ prog.total_count }} sumber</span>{% endif %}
+  <span class="chip-bar" aria-hidden="true"><span style="width: {{ prog.percent }}%"></span></span>
+</a>
+{% elif running %}
+<a class="status-chip" href="/settings">
+  <span class="spinner" aria-hidden="true"></span>Scraping<span class="label-long"> berjalan…</span></a>
 {% elif last_scrape %}
 <a class="status-chip" href="/settings" title="Scraping terakhir {{ last_scrape | date_id(true) }}">
   <span class="dot {{ 'dot-warn' if failed_runs else 'dot-ok' }}" aria-hidden="true"></span>
@@ -8,3 +19,4 @@
 {% else %}
 <a class="status-chip" href="/settings"><span class="dot" aria-hidden="true"></span>Belum scraping</a>
 {% endif %}
+</div>
