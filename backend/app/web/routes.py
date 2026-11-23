@@ -20,6 +20,8 @@ from app.services.jobs import (
     latest_runs,
     list_jobs,
     recent_runs,
+    hidden_matches,
+    region_counts,
     search_outside_filters,
     source_counts,
 )
@@ -84,6 +86,7 @@ async def jobs_page(
         "counts": await job_counts(session),
         "source_options": await source_counts(session, f),
         "outside": (await search_outside_filters(session, f.q)) if f.q and total == 0 else 0,
+        "hidden": (await hidden_matches(session, f)) if f.q and total == 0 else [],
         "outside_url": "/jobs?" + urlencode([("f", "1"), ("q", f.q), ("loc", ""), ("posted", "")]
                                            + [("status", s) for s in ("new", "seen", "saved", "applied")]),
         "prev_url": f"/jobs?{urlencode(f.to_query(page=f.page - 1))}" if f.page > 1 else None,
@@ -93,6 +96,9 @@ async def jobs_page(
     }
     partial = _is_htmx(request, "job-results")
     ctx["oob_sources"] = partial  # angka per sumber di panel filter ikut diperbarui
+    if not partial:  # dropdown lokasi hanya ada di halaman penuh
+        from app.services.wilayah import grouped_options
+        ctx["region_groups"] = grouped_options(await region_counts(session))
     template = "partials/job_results.html" if partial else "pages/jobs.html"
     return templates.TemplateResponse(request, template, ctx)
 

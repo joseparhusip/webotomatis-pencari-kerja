@@ -46,6 +46,8 @@ class Job(TimestampMixin, Base):
 
     location_city: Mapped[str | None] = mapped_column(String(120))
     location_province: Mapped[str | None] = mapped_column(String(120))
+    # Kode wilayah Kemendagri hasil app.services.wilayah: "31.74" (kab/kota) atau "31" (hanya provinsi).
+    region_code: Mapped[str | None] = mapped_column(String(8), index=True)
     work_mode: Mapped[WorkMode | None] = mapped_column(str_enum(WorkMode))
     employment_type: Mapped[EmploymentType | None] = mapped_column(str_enum(EmploymentType))
     experience_level: Mapped[ExperienceLevel | None] = mapped_column(str_enum(ExperienceLevel))

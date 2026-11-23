@@ -135,3 +135,16 @@ def test_rupiah_short():
     assert rupiah_short(8_000_000, 12_000_000) == "Rp 8–12 jt"
     assert rupiah_short(8_500_000, 8_500_000) == "Rp 8,5 jt"
     assert rupiah_short(None, None) == "—"
+
+
+def test_classify_role_it_titles_outside_it_category():
+    # Judul IT yang dipasang pengiklan di kategori non-IT (mis. Kesehatan, Administrasi).
+    hc = "Kesehatan & Medis / Perangkat Farmasi & Medis"
+    assert classify_role("Application Support Staff (Jayapura)", None, hc) is RoleCategory.IT_SUPPORT
+    assert classify_role("Electronic Data Processing Staff") is RoleCategory.IT_SUPPORT
+    assert classify_role("Staff EDP") is RoleCategory.IT_SUPPORT
+    assert classify_role("Data Science Analyst") is RoleCategory.DATA
+    # tetap non-IT
+    assert classify_role("Data Entry Intern") is RoleCategory.OTHER
+    assert classify_role("Application Engineer - Analytical Instruments") is RoleCategory.OTHER
+    assert classify_role("Digital Marketing") is RoleCategory.OTHER

@@ -101,13 +101,14 @@ _IT_ROLE_RULES: list[tuple[RoleCategory, re.Pattern]] = [
         r"software development engineer in test|automation test)", re.I)),
     (RoleCategory.DATA, re.compile(
         r"\b(data (analyst|engineer|scientist|warehouse|analytics|specialist)|business intelligence|bi (analyst|developer)|"
-        r"analis data|machine learning|ml engineer|ai engineer|artificial intelligence|etl|database (developer|administrator|admin)|dba)\b", re.I)),
+        r"data science|analis data|machine learning|ml engineer|ai engineer|artificial intelligence|etl|database (developer|administrator|admin)|dba)\b", re.I)),
     (RoleCategory.IT_SUPPORT, re.compile(
         r"\b(it support|technical support|tech support|help ?desk|service desk|desktop support|it helpdesk|"
         r"network (engineer|administrator|admin)|system administrator|sys ?admin|noc|it infrastructure|"
         r"infrastructure engineer|teknisi (it|komputer|jaringan)|it technician|staf+ it|staff it|it staff|it officer|"
         r"admin it|it admin|it operation|it ops|support engineer|it engineer|it asset|"
-        r"teknisi\b.{0,20}\b(printer|komputer|laptop|cctv|it|jaringan)|computer technician)\b", re.I)),
+        r"teknisi\b.{0,20}\b(printer|komputer|laptop|cctv|it|jaringan)|computer technician|"
+        r"application support|support aplikasi|aplikasi support|edp|electronic data processing)\b", re.I)),
     (RoleCategory.IT_OTHER, re.compile(
         r"\b(system analyst|analis sistem|business analyst|it business analyst|devops|devsecops|sre|site reliability|"
         r"cloud (engineer|architect)|security|cyber|penetration|soc analyst|ui/?ux|ux designer|ui designer|"

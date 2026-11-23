@@ -18,7 +18,8 @@ class JobStreetConnector(Connector):
     name = "jobstreet"
     base_url = "https://id.jobstreet.com"
     supports_detail = True
-    max_pages = 30           # kategori IT diambil sampai habis (100/halaman); keyword dibatasi 2 halaman
+    max_pages = 30           # kategori IT diambil sampai habis (100/halaman)
+    KEYWORD_PAGES = 5        # keyword juga 100/halaman sampai habis (terbanyak ±300 hasil per 3 hari)
     IT_CLASSIFICATION = "6281"  # "Teknologi Informasi & Komunikasi"
     ALL_IT = "@kategori-it"
 
@@ -34,7 +35,7 @@ class JobStreetConnector(Connector):
             "siteKey": "ID-Main",
             "sourcesystem": "houston",
             "page": page,
-            "pageSize": 100 if by_category else self.page_size,
+            "pageSize": 100,
             "locale": "id-ID",
             "sortmode": "ListedDate",
             "daterange": get_settings().scrape_max_age_days,
@@ -48,7 +49,7 @@ class JobStreetConnector(Connector):
         data = resp.json().get("data", [])
         full = len(data) >= params["pageSize"]
         return SearchPage([self._normalize(item) for item in data],
-                          has_more=full and (by_category or page < 2))
+                          has_more=full and (by_category or page < self.KEYWORD_PAGES))
 
     async def fetch_detail(
         self, client: httpx.AsyncClient, url: str, external_id: str, raw: dict

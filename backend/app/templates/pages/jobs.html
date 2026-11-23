@@ -31,11 +31,22 @@
 
         <label class="field">
           <span class="label">Lokasi</span>
-          <select name="loc">
+          <select name="loc" data-search="Cari kota / kabupaten / provinsi…">
+            <optgroup label="Cepat">
             {% for val, text in [('jabodetabek_remote', 'Jabodetabek + Remote'), ('jabodetabek', 'Jabodetabek'), ('remote', 'Remote'), ('', 'Semua lokasi')] %}
             <option value="{{ val }}" {% if f.loc == val %}selected{% endif %}>{{ text }}</option>
             {% endfor %}
+            </optgroup>
+            {% for g in region_groups %}
+            <optgroup label="{{ g.name }}">
+              <option value="wil:{{ g.code }}" {% if f.loc == 'wil:' ~ g.code %}selected{% endif %}>Semua {{ g.name }}{% if g.count %} ({{ g.count }}){% endif %}</option>
+              {% for r in g['items'] %}
+              <option value="wil:{{ r.code }}" {% if f.loc == 'wil:' ~ r.code %}selected{% endif %}>{{ r.name }}{% if r.count %} ({{ r.count }}){% endif %}</option>
+              {% endfor %}
+            </optgroup>
+            {% endfor %}
           </select>
+          <span class="meta">Kab/kota sesuai Kepmendagri 2025. Angka = lowongan aktif di database.</span>
         </label>
 
         <fieldset>

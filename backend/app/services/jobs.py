@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Job, JobListing, ScrapeRun, Source
 from app.models.enums import JobStatus, RoleCategory, WorkMode
+from app.services.wilayah import JABODETABEK_PROVINCE, JABODETABEK_REGENCIES
 
 PAGE_SIZE = 50
 JABODETABEK = ("jakarta", "bekasi", "depok", "bogor", "tangerang")
@@ -56,13 +57,37 @@ class JobFilters:
         return pairs
 
 
+def region_clause(code: str):
+    """Provinsi ("31") = semua kab/kota di dalamnya + lowongan yang hanya menyebut provinsinya."""
+    if "." in code:
+        return Job.region_code == code
+    return or_(Job.region_code == code, Job.region_code.like(f"{code}.%"))
+
+
 def _location_clause(loc: str):
     city_match = or_(
-        *[Job.location_city.ilike(f"%{c}%") for c in JABODETABEK],
-        Job.location_province.ilike("%jakarta%"),
+        region_clause(JABODETABEK_PROVINCE),
+        Job.region_code.in_(JABODETABEK_REGENCIES),
+        # cadangan untuk lokasi yang belum terpetakan ke kode wilayah
+        and_(Job.region_code.is_(None), or_(*[Job.location_city.ilike(f"%{c}%") for c in JABODETABEK],
+                                            Job.location_province.ilike("%jakarta%"))),
     )
     remote = Job.work_mode == WorkMode.REMOTE
+    if loc.startswith("wil:"):  # satu provinsi / kabupaten / kota dari dropdown
+        code = loc[4:]
+        return region_clause(code) if re.fullmatch(r"\d{2}(\.\d{2})?", code) else None
     return {"jabodetabek": city_match, "remote": remote, "jabodetabek_remote": or_(city_match, remote)}.get(loc)
+
+
+async def region_counts(session: AsyncSession) -> dict[str, int]:
+    """Jumlah lowongan aktif per kode wilayah (untuk angka di dropdown lokasi)."""
+    now = datetime.now(UTC)
+    rows = await session.execute(
+        select(Job.region_code, func.count(Job.id))
+        .where(Job.region_code.is_not(None), Job.status != JobStatus.HIDDEN,
+               or_(Job.expires_at.is_(None), Job.expires_at >= now))
+        .group_by(Job.region_code))
+    return dict(rows.all())
 
 
 _STOP = {"pt", "cv", "tbk", "dan", "and", "di", "the", "of", "&"}
@@ -145,6 +170,42 @@ async def search_outside_filters(session: AsyncSession, q: str) -> int:
     return await session.scalar(select(func.count(Job.id)).where(
         search_clause(q), Job.status != JobStatus.HIDDEN, or_(Job.expires_at.is_(None), Job.expires_at >= now),
     )) or 0
+
+
+_FILTER_LABELS = {
+    "roles": "kategori", "levels": "level", "loc": "lokasi", "posted_days": "tanggal posting",
+    "statuses": "status", "modes": "mode kerja", "salary_min": "gaji", "min_score": "skor", "sources": "sumber",
+}
+
+
+async def hidden_matches(session: AsyncSession, f: JobFilters, limit: int = 5) -> list[dict]:
+    """Lowongan yang cocok dengan kata pencarian tetapi tidak tampil: filter mana yang menyembunyikannya.
+
+    Tiap filter diuji sendiri-sendiri (kata pencarian + satu filter), jadi alasannya pasti, bukan tebakan.
+    """
+    if not f.q:
+        return []
+    now = datetime.now(UTC)
+    jobs = list(await session.scalars(
+        select(Job).where(search_clause(f.q), Job.status != JobStatus.HIDDEN,
+                          or_(Job.expires_at.is_(None), Job.expires_at >= now))
+        .order_by(Job.posted_at.desc().nulls_last()).limit(limit)
+    ))
+    if not jobs:
+        return []
+    ids = [j.id for j in jobs]
+    blocked: dict[int, list[str]] = {i: [] for i in ids}
+    for attr, label in _FILTER_LABELS.items():
+        value = getattr(f, attr)
+        if value in (None, "", []):
+            continue
+        single = JobFilters(q=f.q, **{attr: value})
+        passing = set(await session.scalars(
+            build_query(single).with_only_columns(Job.id).where(Job.id.in_(ids))))
+        for i in ids:
+            if i not in passing:
+                blocked[i].append(label)
+    return [{"job": j, "reasons": blocked[j.id]} for j in jobs]
 
 
 async def job_counts(session: AsyncSession) -> dict:

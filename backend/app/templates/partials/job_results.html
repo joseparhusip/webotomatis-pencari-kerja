@@ -30,8 +30,25 @@
 <div class="empty">
   <p>Tidak ada lowongan yang cocok dengan filter ini.</p>
   {% if outside %}
-  <p><strong>{{ outside }} lowongan cocok dengan "{{ f.q }}"</strong> tetapi tersembunyi oleh filter (kategori, lokasi, level, atau tanggal).
-    <a href="{{ outside_url }}" hx-get="{{ outside_url }}" hx-target="#job-results" hx-push-url="true">Tampilkan semua hasil pencarian ›</a></p>
+  <p><strong>{{ outside }} lowongan cocok dengan "{{ f.q }}"</strong> tetapi tersembunyi oleh filter yang sedang aktif:</p>
+  {% if hidden %}
+  <ul class="hidden-matches">
+    {% for h in hidden %}{% set j = h.job %}
+    {% set why = {
+      "kategori": ROLE_LABELS.get(j.role_category.value if j.role_category else "", "?"),
+      "level": LEVEL_LABELS.get(j.experience_level.value if j.experience_level else "unknown"),
+      "lokasi": (j.location_city or j.location_province or "tidak disebut"),
+      "tanggal posting": (j.posted_at.strftime("%d %b") if j.posted_at else "?"),
+      "status": STATUS_LABELS.get(j.status.value, j.status.value),
+      "mode kerja": MODE_LABELS.get(j.work_mode.value if j.work_mode else "", "tidak disebut"),
+    } %}
+    <li><a href="/jobs/{{ j.id }}">{{ j.title }}</a> <span class="meta">· {{ j.company_name }}</span><br>
+      <span class="meta">Tersembunyi oleh:
+        {% for r in h.reasons %}<strong>{{ r }}</strong>{% if why.get(r) %} ({{ why[r] }}){% endif %}{% if not loop.last %}, {% endif %}{% else %}filter lain{% endfor %}</span></li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+  <p><a href="{{ outside_url }}" hx-get="{{ outside_url }}" hx-target="#job-results" hx-push-url="true">Tampilkan semua hasil pencarian ›</a></p>
   {% endif %}
   <p class="meta">Coba longgarkan lokasi, level, atau rentang tanggal. <a href="/jobs?f=1">Tampilkan semua tanpa filter</a></p>
 </div>

@@ -11,6 +11,7 @@ from app.models import Job, JobListing, Source
 from app.models.enums import ApplyMode
 from app.services.parsing import dedup_hash, extract_hr_email
 from app.services.targeting import classify_role, detect_level, level_from_years, score_job
+from app.services.wilayah import resolve as resolve_region
 
 
 async def ingest(session: AsyncSession, source: Source, items: list[JobIn], now: datetime) -> int:
@@ -99,6 +100,7 @@ def score_text(job: Job) -> str:
 def rescore(job: Job) -> None:
     """Kategori, level, skor, dan email HR dihitung ulang dari data yang tersimpan."""
     text = score_text(job)
+    job.region_code = resolve_region(job.location_city, job.location_province)
     job.role_category = classify_role(job.title, text, job.source_category)
     job.experience_level = (level_from_years(job.experience_min) or detect_level(job.title, text)
                             or job.experience_level)

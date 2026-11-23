@@ -421,3 +421,59 @@ textarea.letter { width: 100%; padding: 14px 16px; font: 400 15px/24px var(--ser
   .sp-bar, .sp-num { grid-column: 2; }
   .sp-num { text-align: left; }
 }
+
+/* lowongan yang cocok pencarian tapi tersembunyi filter */
+.hidden-matches { margin: 8px 0 12px; padding-left: 18px; display: grid; gap: 8px; }
+
+/* ---------- Dropdown (select.js) ---------- */
+/* Cadangan tanpa JS: panah sendiri, tidak mepet tepi kanan. */
+select { appearance: none; -webkit-appearance: none; padding-right: 36px; cursor: pointer;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M4 6l4 4 4-4' fill='none' stroke='%236E6B62' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 12px center; background-size: 14px; }
+.dd { position: relative; width: 100%; }
+.dd-native { position: absolute; inset: 0; opacity: 0; pointer-events: none; }
+.dd-btn { display: flex; align-items: center; gap: 10px; width: 100%; height: 34px; padding: 0 12px 0 10px;
+  font: inherit; color: var(--ink); text-align: left; cursor: pointer;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 4px;
+  transition: border-color .15s ease, box-shadow .15s ease, background-color .15s ease; }
+.dd-btn:hover { border-color: var(--line-strong); }
+.dd.is-open .dd-btn { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.dd-btn:disabled { opacity: .6; cursor: not-allowed; }
+.dd-value { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dd-chevron { flex: none; width: 14px; height: 14px; color: var(--ink-3);
+  transition: transform .22s cubic-bezier(.3, .7, .4, 1), color .15s ease; }
+.dd-btn:hover .dd-chevron { color: var(--ink-2); }
+.dd.is-open .dd-chevron { transform: rotate(180deg); color: var(--accent); }
+.dd-sm .dd-btn { height: 28px; font-size: 13px; padding: 0 10px 0 8px; gap: 8px; }
+.dd-sm .dd-chevron { width: 12px; height: 12px; }
+
+.dd-panel { position: fixed; z-index: 100; display: flex; flex-direction: column; overflow: hidden;
+  background: var(--surface); border: 1px solid var(--line-strong); border-radius: 6px;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, .14), 0 2px 6px rgba(0, 0, 0, .08);
+  opacity: 0; transform: translateY(-4px) scale(.98); transform-origin: top center;
+  transition: opacity .16s ease, transform .18s cubic-bezier(.3, .7, .4, 1); }
+.dd-panel.is-up { transform: translateY(4px) scale(.98); transform-origin: bottom center; }
+.dd-panel.is-open { opacity: 1; transform: none; }
+.dd-panel.is-closing { pointer-events: none; }
+.dd-search { position: relative; flex: none; padding: 8px; border-bottom: 1px solid var(--line); }
+.dd-search svg { position: absolute; left: 18px; top: 50%; width: 14px; height: 14px; margin-top: -7px; color: var(--ink-3); pointer-events: none; }
+.dd-search input[type="text"] { height: 32px; padding-left: 32px; }
+.dd-search input:focus { outline: none; border-color: var(--accent); }
+.dd-list { list-style: none; margin: 0; padding: 4px; overflow-y: auto; overscroll-behavior: contain; outline: none; }
+.dd-group { padding: 10px 10px 4px; font-size: 11px; line-height: 14px; font-weight: 600; letter-spacing: .04em;
+  text-transform: uppercase; color: var(--ink-3); }
+.dd-group:first-child { padding-top: 6px; }
+.dd-opt { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 4px; cursor: pointer;
+  line-height: 18px; transition: background-color .08s ease; }
+.dd-opt.in-group { padding-left: 18px; }
+.dd-opt.is-active { background: var(--surface-2); }
+.dd-opt.is-selected { color: var(--accent); font-weight: 500; }
+.dd-opt[aria-disabled="true"] { opacity: .5; cursor: default; }
+.dd-text { flex: 1; min-width: 0; }
+.dd-count { font: 400 12px/16px var(--mono); color: var(--ink-3); }
+.dd-check { flex: none; width: 14px; height: 14px; visibility: hidden; }
+.dd-opt.is-selected .dd-check { visibility: visible; }
+.dd-empty { margin: 0; padding: 14px 12px; color: var(--ink-3); font-size: 13px; }
+@media (prefers-reduced-motion: reduce) {
+  .dd-chevron, .dd-panel, .dd-btn { transition: none; }
+}
