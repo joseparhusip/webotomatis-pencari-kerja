@@ -726,3 +726,40 @@ tbody tr:hover { background: color-mix(in srgb, var(--accent-soft) 45%, transpar
 @media (prefers-reduced-motion: reduce) {
   .btn:hover, .src:hover, .app-card:hover { transform: none; }
 }
+
+/* Filter bidang: grup IT / Non-IT */
+.role-group { margin: 10px 0 6px; font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--ink-3); }
+.role-hint { margin: 0 0 4px; }
+.filters .checks label .dot { width: 7px; height: 7px; margin-left: 2px; }
+
+/* Profil → dasar target dari CV */
+.target-basis { margin: 4px 0 14px; padding: 12px 14px; background: var(--surface-2); border-radius: var(--r-md, 6px); }
+.target-basis > summary { cursor: pointer; font-weight: 600; }
+.target-basis ul { margin: 10px 0 0; padding-left: 18px; display: grid; gap: 6px; }
+.filters .role-group + .checks, #target .checks { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 12px; }
+.filters .role-group + .checks label, #target .checks label { align-items: flex-start; line-height: 18px; }
+.filters .role-group + .checks input, #target .checks input { margin-top: 1px; flex: none; }
+
+/* Profil → status kesimpulan AI & layar loading scan CV */
+.ai-status { display: flex; align-items: flex-start; gap: 12px; margin: 0 0 16px; padding: 12px 16px;
+  border-radius: var(--r-md, 6px); border: 1px solid var(--line); background: var(--surface); box-shadow: var(--sh-1, none); }
+.ai-status > div { display: grid; gap: 2px; flex: 1; }
+.ai-status.is-busy { border-color: var(--accent); background: var(--accent-soft); }
+.ai-status.is-busy .spinner { margin-top: 3px; }
+.ai-status.is-failed { border-color: var(--warn); background: var(--warn-soft); color: var(--ink); }
+.scan-overlay { position: fixed; inset: 0; z-index: 200; display: grid; place-items: center; padding: 16px;
+  background: rgba(20, 20, 16, .45); backdrop-filter: blur(2px); animation: fade-in .2s ease; }
+.scan-card { width: min(460px, 100%); padding: 24px; border-radius: 18px; background: var(--surface); color: var(--ink);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, .25); }
+.scan-card h2 { display: flex; align-items: center; gap: 10px; font-size: 16px; margin: 0 0 4px; }
+.scan-card .meta { display: block; margin-bottom: 14px; }
+.scan-steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.scan-steps li { display: flex; align-items: center; gap: 10px; color: var(--ink-3); }
+.scan-steps .mark { display: grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; flex: none;
+  border: 2px solid var(--line); font-size: 11px; line-height: 1; }
+.scan-steps li.is-active { color: var(--ink); font-weight: 600; }
+.scan-steps li.is-active .mark { border-color: var(--accent); border-top-color: transparent; animation: spin .8s linear infinite; }
+.scan-steps li.is-done { color: var(--ink-2); }
+.scan-steps li.is-done .mark { border-color: var(--accent); background: var(--accent); color: var(--accent-ink); }
+.scan-steps li[hidden] { display: none; }
+.scan-foot { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--line); }

@@ -67,7 +67,7 @@ def test_classify_role():
     assert classify_role("Full Stack Engineer (Next.js/Go)") is RoleCategory.FULLSTACK
     assert classify_role("Frontend Developer - React") is RoleCategory.FRONTEND
     assert classify_role("Backend Engineer Golang") is RoleCategory.BACKEND
-    assert classify_role("Sales Executive Software") is RoleCategory.OTHER
+    assert classify_role("Sales Executive Software") is RoleCategory.SALES  # bukan IT
 
 
 def test_classify_generic_titles_from_description():
@@ -78,7 +78,7 @@ def test_classify_generic_titles_from_description():
     assert classify_role(".Net Developer", "C# ASP.NET") is RoleCategory.BACKEND
     assert classify_role("QA Engineer", "") is RoleCategory.QA
     assert classify_role("Data Warehouse (DW) Developer", "SQL ETL") is RoleCategory.DATA
-    assert classify_role("Full Time Pengajar UTBK Numerasi Bekasi", "") is RoleCategory.OTHER
+    assert classify_role("Full Time Pengajar UTBK Numerasi Bekasi", "") is RoleCategory.EDUCATION
 
 
 def test_classify_all_it_jobs():
@@ -93,15 +93,18 @@ def test_classify_all_it_jobs():
     }
     for title, expected in it.items():
         assert classify_role(title) is expected, title
-    for title in ("Barista Mobile", "Mobile Waiter", "Server Restaurant", "Mekanik Mobil", "Sales Executive"):
-        assert classify_role(title) is RoleCategory.OTHER, title
+    non_it = {"Barista Mobile": RoleCategory.HOSPITALITY, "Mobile Waiter": RoleCategory.HOSPITALITY,
+              "Server Restaurant": RoleCategory.HOSPITALITY, "Mekanik Mobil": RoleCategory.ENGINEERING,
+              "Sales Executive": RoleCategory.SALES}
+    for title, expected in non_it.items():
+        assert classify_role(title) is expected, title
     # Kategori asli situs: judul umum di kategori IT JobStreet tetap dianggap IT.
     assert classify_role("Vendor Management Officer", "", "Teknologi Informasi & Komunikasi / Manajemen") \
         is RoleCategory.IT_OTHER
     assert classify_role("Network Admin", "", None) is RoleCategory.IT_SUPPORT
     # Sales di kategori IT situs sumber tetap muncul sebagai IT; tanpa kategori IT tetap Non-IT.
     assert classify_role("Jr Account Executive", "", "Teknologi Informasi & Komunikasi / Penjualan") is RoleCategory.IT_OTHER
-    assert classify_role("Jr Account Executive", "", "Penjualan / Akun") is RoleCategory.OTHER
+    assert classify_role("Jr Account Executive", "", "Penjualan / Akun") is RoleCategory.SALES
     assert classify_role("Staf Unit Operasional Sistem – Database Admin") is RoleCategory.DATA
 
 
@@ -144,7 +147,7 @@ def test_classify_role_it_titles_outside_it_category():
     assert classify_role("Electronic Data Processing Staff") is RoleCategory.IT_SUPPORT
     assert classify_role("Staff EDP") is RoleCategory.IT_SUPPORT
     assert classify_role("Data Science Analyst") is RoleCategory.DATA
-    # tetap non-IT
-    assert classify_role("Data Entry Intern") is RoleCategory.OTHER
-    assert classify_role("Application Engineer - Analytical Instruments") is RoleCategory.OTHER
-    assert classify_role("Digital Marketing") is RoleCategory.OTHER
+    # tetap non-IT (bidangnya masing-masing)
+    assert classify_role("Data Entry Intern") is RoleCategory.ADMIN
+    assert classify_role("Application Engineer - Analytical Instruments") is RoleCategory.ENGINEERING
+    assert classify_role("Digital Marketing") is RoleCategory.MARKETING

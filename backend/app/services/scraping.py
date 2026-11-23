@@ -15,7 +15,7 @@ from app.services.details import backfill
 from app.services.ingest import ingest
 from app.services.letter_template import SOURCE_LABELS
 from app.services.scrape_progress import SKIP_KEY, SKIP_TTL, NullProgress, Progress, get_redis
-from app.services.targeting import SEARCH_KEYWORDS
+from app.services.targeting import load_target, search_keywords
 
 log = logging.getLogger(__name__)
 
@@ -82,7 +82,10 @@ async def run_connector(connector: Connector, keywords: list[str] | None = None,
             )
             if last and datetime.now(UTC) - last < timedelta(hours=connector.min_interval_hours):
                 return await skip(f"menunggu jadwal (tiap {connector.min_interval_hours:g} jam)")
-        keywords = keywords or await connector.targets(session, SEARCH_KEYWORDS)
+        default = search_keywords()
+        if not default and connector.name != "instagram":
+            return await skip("target pencarian kosong — unggah CV di Profil")
+        keywords = keywords or await connector.targets(session, default)
         if not keywords:
             return await skip("tidak ada target (mis. belum ada akun Instagram)")
         run = ScrapeRun(source_id=source.id, started_at=datetime.now(UTC))
@@ -104,7 +107,8 @@ async def run_connector(connector: Connector, keywords: list[str] | None = None,
             for k_index, keyword in enumerate(keywords, 1):
                 if blocked:
                     break
-                phase = f'Mencari lowongan · "{keyword}"' if len(keywords) > 1 else "Mencari lowongan"
+                phase = (f"Mencari lowongan · {connector.keyword_label(keyword)}" if len(keywords) > 1
+                         else "Mencari lowongan")
                 await progress.source(name, phase=phase)
                 for page in range(1, max_pages + 1):
                     try:
@@ -164,6 +168,12 @@ async def run_connector(connector: Connector, keywords: list[str] | None = None,
 async def scrape_all(trigger: str = "otomatis") -> list[dict]:
     """Semua sumber berjalan bersamaan (situs berbeda), tetapi tiap situs tetap diakses berurutan
     dengan jeda — jadi total waktu ≈ sumber paling lama, bukan jumlah semuanya."""
+    from app.services.profile import ensure_targets
+
+    async with SessionLocal() as session:
+        await ensure_targets(session)          # data lama: turunkan target dari CV utama
+        target = await load_target(session)    # semua sumber memakai target CV aktif
+    log.info("Target scraping: bidang %s · keyword %s", [c.value for c in target.categories], search_keywords())
     progress = Progress(get_redis(), trigger, {n: SOURCE_LABELS.get(n, n) for n in REGISTRY})
     await progress.save()
 

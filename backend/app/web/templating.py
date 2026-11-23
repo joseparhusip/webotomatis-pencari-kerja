@@ -9,7 +9,14 @@ BULAN = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "
 
 ROLE_LABELS = {"fullstack": "Full Stack", "frontend": "Frontend", "backend": "Backend",
                "mobile": "Mobile", "qa": "QA / Tester", "it_support": "IT Support", "data": "Data / BI",
-               "it_other": "IT Lainnya", "other": "Non-IT"}
+               "it_other": "IT Lainnya", "marketing": "Marketing", "creative": "Kreatif & Konten",
+               "sales": "Sales", "admin": "Admin & Back Office", "customer_service": "Customer Service",
+               "finance": "Keuangan & Akuntansi", "hr": "HR & Rekrutmen", "operations": "Operasional & Logistik",
+               "engineering": "Teknik", "education": "Pendidikan", "healthcare": "Kesehatan",
+               "hospitality": "Hotel, F&B & Retail", "other": "Lainnya"}
+IT_ROLE_KEYS = ["fullstack", "frontend", "backend", "mobile", "qa", "it_support", "data", "it_other"]
+NON_IT_ROLE_KEYS = ["marketing", "creative", "sales", "admin", "customer_service", "finance", "hr", "operations",
+                    "engineering", "education", "healthcare", "hospitality", "other"]
 MODE_LABELS = {"onsite": "WFO", "remote": "Remote", "hybrid": "Hybrid"}
 LEVEL_LABELS = {"entry": "Entry", "junior": "Junior", "mid": "Mid", "senior": "Senior",
                 "unknown": "Tidak disebut"}
@@ -123,9 +130,11 @@ def _duration(seconds: int) -> str:
 
 templates.env.filters["duration"] = _duration
 from app.services.letter_template import SOURCE_LABELS  # noqa: E402
+from app.services.targeting import current_target as _current_target  # noqa: E402
 
 templates.env.globals.update(
     SOURCE_LABELS=SOURCE_LABELS,
     ROLE_LABELS=ROLE_LABELS, MODE_LABELS=MODE_LABELS, LEVEL_LABELS=LEVEL_LABELS,
+    IT_ROLE_KEYS=IT_ROLE_KEYS, NON_IT_ROLE_KEYS=NON_IT_ROLE_KEYS, current_target=_current_target,
     EMPLOYMENT_LABELS=EMPLOYMENT_LABELS, STATUS_LABELS=STATUS_LABELS,
 )

@@ -21,6 +21,9 @@ class UserProfile(TimestampMixin, Base):
     summary: Mapped[str | None] = mapped_column(Text)
     skills: Mapped[list[str]] = mapped_column(ARRAY(String(60)), default=list)
     experience_years: Mapped[int] = mapped_column(Integer, default=0)
+    # Target pencarian dari CV aktif (bisa diedit di Profil): bidang lowongan & keyword scraping.
+    target_categories: Mapped[list[str]] = mapped_column(ARRAY(String(20)), default=list, server_default="{}")
+    target_keywords: Mapped[list[str]] = mapped_column(ARRAY(String(80)), default=list, server_default="{}")
     preferred_language: Mapped[str] = mapped_column(String(2), default="id")
     signature: Mapped[str | None] = mapped_column(Text)
 

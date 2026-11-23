@@ -16,10 +16,23 @@ from app.web.routes import router
 log = logging.getLogger(__name__)
 
 
+async def _load_target() -> None:
+    """Target CV aktif dipakai saat web menghitung skor (mis. tombol perbarui detail)."""
+    from app.core.db import SessionLocal
+    from app.services.targeting import load_target
+
+    try:
+        async with SessionLocal() as session:
+            await load_target(session)
+    except Exception:  # DB belum siap: target dimuat ulang saat Profil disimpan
+        pass
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     try:
         app.state.arq = await create_pool(RedisSettings.from_dsn(get_settings().redis_url))
+        await _load_target()
     except Exception:  # web tetap jalan tanpa Redis; tombol scraping akan memberi pesan jelas
         log.warning("Redis tidak tersedia — antrean scraping nonaktif", exc_info=True)
         app.state.arq = None

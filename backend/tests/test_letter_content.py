@@ -2,9 +2,8 @@
 
 from app.models import Job, JobListing, Source, UserProfile
 from app.models.enums import RoleCategory, WorkMode
+from sample_texts import SAMPLE_EVIDENCE, SAMPLE_INTRO_ID, SAMPLE_STRENGTH_ID
 from app.services.letter_template import (
-    DEFAULT_INTRO_ID,
-    DEFAULT_STRENGTH_ID,
     _join,
     build_template_letter,
     clean_title,
@@ -14,8 +13,8 @@ from app.services.letter_template import (
 
 
 def _profile(**kw) -> UserProfile:
-    base = dict(full_name="Nama Kandidat", email="kandidat@example.com", intro_id=DEFAULT_INTRO_ID,
-                strength_id=DEFAULT_STRENGTH_ID,
+    base = dict(full_name="Nama Kandidat", email="kandidat@example.com", intro_id=SAMPLE_INTRO_ID,
+                strength_id=SAMPLE_STRENGTH_ID,
                 skills=["Go", "PostgreSQL", "PHP", "MySQL", "React", "Flutter", "Node.js"])
     base.update(kw)
     return UserProfile(**base)
@@ -34,14 +33,14 @@ def _job(**kw) -> Job:
 
 
 def test_header_addresses_company_and_city():
-    letter = build_template_letter(_job(), _profile(), "id")
+    letter = build_template_letter(_job(), _profile(), "id", SAMPLE_EVIDENCE)
     assert letter.startswith("Perihal: Lamaran Pekerjaan sebagai Mobile Developer\n\n"
                              "Yth. Bapak/Ibu Tim Rekrutmen\nPT Contoh Mobile\ndi Bekasi\n\nDengan hormat,")
     assert "melalui Glints" in letter
 
 
 def test_remote_job_is_addressed_di_tempat():
-    letter = build_template_letter(_job(work_mode=WorkMode.REMOTE), _profile(), "id")
+    letter = build_template_letter(_job(work_mode=WorkMode.REMOTE), _profile(), "id", SAMPLE_EVIDENCE)
     assert "\ndi Tempat\n" in letter
 
 
@@ -53,7 +52,7 @@ def test_only_owned_skills_are_claimed():
 
 
 def test_letter_mentions_requirements_and_is_honest_about_gaps():
-    letter = build_template_letter(_job(), _profile(), "id")
+    letter = build_template_letter(_job(), _profile(), "id", SAMPLE_EVIDENCE)
     assert "Posisi ini membutuhkan penguasaan Flutter" in letter
     assert "Untuk React Native dan Laravel yang juga disebutkan dalam kualifikasi" in letter
     fit = letter.split("Posisi ini membutuhkan penguasaan")[1].split(".")[0]
@@ -63,7 +62,7 @@ def test_letter_mentions_requirements_and_is_honest_about_gaps():
 def test_evidence_matches_role():
     backend = _job(title="Backend Developer", role_category=RoleCategory.BACKEND,
                    required_skills=["PostgreSQL", "Go"])
-    letter = build_template_letter(backend, _profile(), "id")
+    letter = build_template_letter(backend, _profile(), "id", SAMPLE_EVIDENCE)
     fit = letter.split("Dengan hormat,")[1]
     assert "MedCredix" in fit
     assert fit.index("MedCredix") < fit.index("Atas perhatian")
@@ -94,7 +93,7 @@ def test_position_from_job_title_in_every_letter_and_check():
 
     job = _job(title="PROGRAMMER  STAF", role_category=RoleCategory.FULLSTACK)
     p = _profile()
-    letter = build_template_letter(job, p, "id")
+    letter = build_template_letter(job, p, "id", SAMPLE_EVIDENCE)
     assert letter.startswith("Perihal: Lamaran Pekerjaan sebagai Programmer Staf\n\n")
     assert default_subject(job, p, "id") == "Lamaran Pekerjaan - Programmer Staf - Nama Kandidat"
 

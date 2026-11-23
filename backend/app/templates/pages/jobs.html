@@ -20,13 +20,18 @@
           <input id="q" type="search" name="q" value="{{ f.q }}" placeholder="posisi, perusahaan, skill">
         </label>
 
+        {% set cv_roles = current_target().categories | map(attribute='value') | list %}
         <fieldset>
-          <legend class="label">Kategori</legend>
+          <legend class="label">Bidang</legend>
+          {% if cv_roles %}<p class="hint role-hint">Titik hijau = bidang dari CV aktif.</p>{% endif %}
+          {% for group, keys in [('IT', IT_ROLE_KEYS), ('Non-IT', NON_IT_ROLE_KEYS)] %}
+          <p class="role-group">{{ group }}</p>
           <div class="checks">
-            {% for key in ['fullstack', 'frontend', 'backend', 'mobile', 'qa', 'it_support', 'data', 'it_other', 'other'] %}
-            <label><input type="checkbox" name="role" value="{{ key }}" {% if key in f.roles %}checked{% endif %}> {{ ROLE_LABELS[key] }}</label>
+            {% for key in keys %}
+            <label><input type="checkbox" name="role" value="{{ key }}" {% if key in f.roles %}checked{% endif %}> {{ ROLE_LABELS[key] }}{% if key in cv_roles %} <span class="dot dot-ok" title="Bidang dari CV" aria-label="bidang dari CV"></span>{% endif %}</label>
             {% endfor %}
           </div>
+          {% endfor %}
         </fieldset>
 
         <label class="field">

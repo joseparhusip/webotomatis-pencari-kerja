@@ -310,6 +310,12 @@ def run_checks(
             checks.append(Check("error", f"Posisi \"{title}\" belum disebut di surat. Tulis posisi yang dilamar "
                                          "sesuai judul lowongan (mis. di baris Perihal)."))
 
+        # Surat selalu ditutup nama pemilik Profil. Nama lain = surat dibuat saat CV orang lain aktif.
+        owner = re.sub(r"\s+", " ", (profile.full_name or "").strip()).lower() if profile else ""
+        if owner and owner not in re.sub(r"\s+", " ", letter).lower():
+            checks.append(Check("error", f"Surat tidak memuat nama di Profil ({profile.full_name}). Surat ini "
+                                         "kemungkinan dibuat saat CV orang lain aktif — klik Buat ulang."))
+
         ph = _PLACEHOLDER.search(letter)
         checks.append(Check("error", f"Ada placeholder: \"{ph.group(0)}\"") if ph
                       else Check("ok", "Tidak ada placeholder"))

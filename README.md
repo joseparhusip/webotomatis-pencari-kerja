@@ -58,11 +58,12 @@ Surat itu dikirim lewat email bersama CV Anda.
 | Fitur | Keterangan |
 |---|---|
 | **Kumpulkan lowongan otomatis** | Scraping berjalan tiap 3 jam di latar belakang. Hanya lowongan **3 hari terakhir** yang diambil. |
-| **Semua lowongan IT** | Full Stack, Frontend, Backend, Mobile, QA, IT Support, Data/BI, DevOps, System Analyst, dan lain-lain. Seluruh kategori IT JobStreet ikut terambil. |
+| **Mengikuti CV siapa pun** | Bidang & keyword pencarian diturunkan dari CV aktif (pengalaman, magang, proyek, skill), masing-masing dengan dasarnya di CV. CV developer → lowongan IT; CV marketing/admin → lowongan marketing/admin. Bisa diedit di **Profil → Target pencarian**. |
+| **Bidang IT & non-IT** | IT (Full Stack, Frontend, Backend, Mobile, QA, IT Support, Data/BI, IT lainnya) dan non-IT (Marketing, Kreatif & Konten, Sales, Admin, Customer Service, Keuangan, HR, Operasional, Teknik, Pendidikan, Kesehatan, Hotel/F&B/Retail). JobStreet menyapu seluruh kategori yang sesuai bidang CV. |
 | **Isi lowongan lengkap** | Deskripsi, kualifikasi, skill, benefit, pendidikan, gaji, dan batas lamaran diambil dari halaman detail, sama seperti di situs aslinya. |
 | **Tanpa duplikat** | Lowongan yang sama di beberapa portal digabung jadi satu, lengkap dengan semua tautannya. |
-| **Filter & pencarian** | Per kategori, level (fresh graduate/junior/…), lokasi, gaji, sumber, dan tanggal. Pencarian juga mengenali nama perusahaan lengkap. |
-| **Skor kecocokan** | Lowongan diberi skor sesuai skill di CV. Yang paling cocok tampil paling atas. |
+| **Filter & pencarian** | Per bidang, level, lokasi (kab/kota Kepmendagri), gaji, sumber, dan tanggal. Filter awal mengikuti CV: bidang target, level sesuai lama pengalaman, dan provinsi domisili. |
+| **Skor kecocokan** | Bidang lowongan vs bidang CV, level vs lama pengalaman, dan skill CV yang disebut iklan (soft skill tidak dihitung). Yang paling cocok tampil paling atas. |
 | **Surat lamaran otomatis** | Ditulis oleh **Gemini** (atau Claude) dalam Bahasa Indonesia/Inggris formal, tanpa kalimat klise. Tanpa API key AI, aplikasi memakai template dari bukti CV. |
 | **Pemeriksaan sebelum kirim** | Nama perusahaan, posisi, panjang surat, placeholder yang tertinggal, kuota email, dan lain-lain. |
 | **Kirim email + CV** | Lewat Gmail (App Password). Ada batas harian dan jeda antar email supaya akun aman. |

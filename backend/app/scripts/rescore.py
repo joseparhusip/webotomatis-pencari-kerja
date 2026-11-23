@@ -36,7 +36,10 @@ def category_from_raw(source: str, raw: dict) -> str | None:
 
 
 async def main() -> None:
+    from app.services.targeting import load_target
+
     async with SessionLocal() as session:
+        await load_target(session)
         jobs = (await session.scalars(select(Job))).all()
         filled = 0
         for job in jobs:

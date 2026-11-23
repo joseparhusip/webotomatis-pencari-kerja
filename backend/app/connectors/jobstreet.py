@@ -18,19 +18,34 @@ class JobStreetConnector(Connector):
     name = "jobstreet"
     base_url = "https://id.jobstreet.com"
     supports_detail = True
-    max_pages = 30           # kategori IT diambil sampai habis (100/halaman)
+    max_pages = 30           # kategori sumber diambil sampai habis (100/halaman, ±3.000 batas API)
     KEYWORD_PAGES = 5        # keyword juga 100/halaman sampai habis (terbanyak ±300 hasil per 3 hari)
-    IT_CLASSIFICATION = "6281"  # "Teknologi Informasi & Komunikasi"
-    ALL_IT = "@kategori-it"
+    SWEEP = "@klasifikasi:"  # token keyword = sapu seluruh satu kategori JobStreet
 
     def keywords(self, default: list[str]) -> list[str]:
-        # Semua lowongan di kategori IT (apa pun judulnya) + keyword untuk IT yang dipasang di kategori lain.
-        return [self.ALL_IT] + default
+        """Sapu kategori JobStreet yang sesuai bidang CV aktif (apa pun judul iklannya) + keyword CV untuk
+        lowongan yang dipasang di kategori lain."""
+        from app.services.targeting import JOBSTREET_CLASSIFICATIONS, current_target
+
+        sweeps: list[str] = []
+        for cat in current_target().categories:
+            for cid in JOBSTREET_CLASSIFICATIONS.get(cat, []):
+                if self.SWEEP + cid not in sweeps:
+                    sweeps.append(self.SWEEP + cid)
+        return sweeps + default
+
+    def keyword_label(self, keyword: str) -> str:
+        if keyword.startswith(self.SWEEP):
+            from app.services.targeting import JOBSTREET_CLASSIFICATION_NAMES
+
+            cid = keyword[len(self.SWEEP):]
+            return f"kategori {JOBSTREET_CLASSIFICATION_NAMES.get(cid, cid)}"
+        return super().keyword_label(keyword)
 
     async def search(
         self, client: httpx.AsyncClient, keyword: str, page: int, known: set[str]
     ) -> SearchPage:
-        by_category = keyword == self.ALL_IT
+        by_category = keyword.startswith(self.SWEEP)
         params = {
             "siteKey": "ID-Main",
             "sourcesystem": "houston",
@@ -41,7 +56,7 @@ class JobStreetConnector(Connector):
             "daterange": get_settings().scrape_max_age_days,
         }
         if by_category:
-            params["classification"] = self.IT_CLASSIFICATION
+            params["classification"] = keyword[len(self.SWEEP):]
         else:
             params["keywords"] = keyword
         resp = await client.get(f"{self.base_url}/api/jobsearch/v5/search", params=params)

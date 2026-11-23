@@ -10,7 +10,20 @@ class RoleCategory(StrEnum):
     IT_SUPPORT = "it_support"  # IT support, helpdesk, jaringan, sysadmin, NOC
     DATA = "data"              # data / BI analyst, data engineer, AI/ML
     IT_OTHER = "it_other"      # system analyst, devops, security, UI/UX, IT project, ERP, IT lainnya
-    OTHER = "other"            # non-IT
+    # Non-IT (supaya CV non-IT juga mendapat lowongan yang sesuai bidangnya)
+    MARKETING = "marketing"                # pemasaran, digital marketing, social media, brand
+    CREATIVE = "creative"                  # desain grafis, video editor, konten kreator, copywriter, fotografer
+    SALES = "sales"                        # sales, account executive, business development
+    ADMIN = "admin"                        # administrasi, back office, data entry, sekretaris
+    CUSTOMER_SERVICE = "customer_service"  # customer service, call center, teller/frontliner
+    FINANCE = "finance"                    # akuntansi, keuangan, pajak, perbankan, asuransi
+    HR = "hr"                              # HR, rekrutmen, people/GA
+    OPERATIONS = "operations"              # operasional, logistik, gudang, supply chain, purchasing, produksi
+    ENGINEERING = "engineering"            # teknik non-IT: sipil, mesin, elektro, konstruksi
+    EDUCATION = "education"                # guru, tutor, pengajar, trainer
+    HEALTHCARE = "healthcare"              # perawat, apoteker, tenaga medis
+    HOSPITALITY = "hospitality"            # hotel, F&B, retail toko, pariwisata
+    OTHER = "other"                        # lainnya
 
 
 class WorkMode(StrEnum):

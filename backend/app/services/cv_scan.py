@@ -17,66 +17,64 @@ import json
 import logging
 import re
 from dataclasses import asdict, dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 
 from app.core.config import get_settings
-from app.services.targeting import matched_skills
+from app.models.enums import RoleCategory
+from app.services.targeting import known_skills, matched_skills
 
 log = logging.getLogger(__name__)
 
 MIN_TEXT_CHARS = 200  # di bawah ini dianggap PDF hasil scan (tanpa lapisan teks)
-AI_TIMEOUT_SECONDS = 180
+AI_TIMEOUT_SECONDS = 260         # total untuk semua model (utama + cadangan)
+PER_MODEL_TIMEOUT_SECONDS = 120  # satu model; lewat dari ini → coba model cadangan
 
 FIELDS = ("full_name", "email", "phone", "address", "linkedin_url", "portfolio_url", "summary")
 LETTER_KEYS = ("intro_id", "intro_en", "strength_id", "strength_en")
-CATEGORIES = ("fullstack", "frontend", "backend", "mobile")
+# Bidang lowongan (sama dengan RoleCategory, tanpa "other").
+CATEGORIES = tuple(c.value for c in RoleCategory if c != RoleCategory.OTHER)
+_CATEGORY_HELP = (
+    "fullstack, frontend, backend, mobile (pengembang software); qa (software tester); it_support; "
+    "data (data/BI analyst, data engineer, AI/ML); it_other (system analyst, devops, UI/UX, ERP, IT lain); "
+    "marketing (pemasaran, digital marketing, social media, brand); creative (desain grafis, video editor, "
+    "konten kreator, copywriter); sales; admin (administrasi, back office, data entry); customer_service; "
+    "finance (akuntansi, keuangan, perbankan); hr; operations (operasional, logistik, gudang, purchasing); "
+    "engineering (teknik non-IT); education; healthcare; hospitality (hotel, F&B, retail)"
+)
 
-_PROMPT = """Ini adalah CV (curriculum vitae) seorang pelamar kerja. Baca SELURUH halaman dengan teliti
-(bila berupa gambar/hasil scan, lakukan OCR karakter demi karakter) lalu isi JSON sesuai skema.
+_PROMPT = """Kamu membantu menyusun bahan lamaran kerja. Sistem SUDAH mengambil teks CV (dari PDF / OCR) dan
+memetakan datanya (lihat DATA CV di bawah). Tugasmu HANYA menyusun kesimpulan dari fakta yang tertulis di TEKS CV,
+lalu isi JSON sesuai skema. Jangan mengubah atau menambah data diri, pengalaman, maupun skill.
 
-DATA DIRI
-- full_name, email, phone: disalin persis seperti tertulis.
-- address: domisili singkat (kota, provinsi) yang tertulis, bukan alamat lengkap.
-- linkedin_url, portfolio_url: link yang tertulis/tertanam (portfolio_url = GitHub atau situs portofolio, bukan LinkedIn).
-- summary: ringkasan profesional 2-4 kalimat Bahasa Indonesia baku. Ambil dari bagian ringkasan/profil di CV
-  (terjemahkan bila berbahasa Inggris); bila tidak ada, susun HANYA dari fakta yang tertulis.
-- skills: skill teknis/alat yang benar-benar tertulis (maks. 30), ejaan resmi (mis. "PostgreSQL", "Node.js").
-- experience_years: total tahun pengalaman kerja profesional dari rentang tanggal kerja di CV (bilangan bulat).
-  Magang, organisasi, dan proyek kuliah tidak dihitung. 0 bila belum ada pengalaman kerja penuh waktu.
-
-RIWAYAT (salin dari CV, urut terbaru dulu)
-- experiences: tiap pengalaman kerja/magang: company, role, employment_type (mis. "Penuh waktu", "Magang",
-  "Freelance"; "" bila tidak tertulis), location, start, end (seperti tertulis, mis. "Jan 2024", "Sekarang"),
-  highlights (poin pencapaian/tugas, disalin dari CV — boleh dirapikan tanpa mengubah fakta dan angka).
-- projects: name, role, tech (daftar teknologi yang tertulis), description (1-2 kalimat dari CV), url (bila ada).
-- education: institution, degree (mis. "S1"), major, start, end, gpa (seperti tertulis).
-- certifications: nama sertifikat/pelatihan/penghargaan + penerbit + tahun, seperti tertulis.
-
-BAHAN SURAT LAMARAN (hanya dari fakta CV)
+- summary_id: ringkasan profesional 2-4 kalimat Bahasa Indonesia baku, hanya dari fakta CV (terjemahkan bila CV
+  berbahasa Inggris).
 - evidence: 4-8 bukti konkret untuk surat lamaran. Tiap bukti satu kalimat utuh yang berdiri sendiri, format
-  "Di/Sebagai <peran> di <perusahaan/proyek>, saya <melakukan apa> menggunakan <teknologi>, <hasil/angka>."
+  "Di/Sebagai <peran> di <perusahaan/proyek>, saya <melakukan apa> menggunakan <teknologi/alat>, <hasil/angka>."
   * source: nama perusahaan atau proyek PERSIS seperti tertulis di CV.
   * text_id: Bahasa Indonesia baku; text_en: English formal (terjemahan setia).
-  * categories: pilih dari fullstack, frontend, backend, mobile yang sesuai bukti itu.
-  * skills: teknologi yang disebut di bukti itu.
+  * categories: bidang lowongan yang cocok untuk bukti itu (kode di bawah, boleh lebih dari satu).
+  * skills: teknologi/alat yang disebut di bukti itu.
   * Angka/metrik hanya boleh yang tertulis di CV. Jangan menambah angka.
-- intro_id / intro_en: satu kalimat perkenalan diri yang berdiri sendiri (latar pendidikan + peran saat ini),
-  tanpa menyebut posisi yang dilamar. Pola: "Saya merupakan lulusan S1 … yang saat ini bekerja sebagai … di …." /
+- intro_id / intro_en: satu kalimat perkenalan diri (latar pendidikan + peran saat ini/terakhir), tanpa menyebut
+  posisi yang dilamar. Pola: "Saya merupakan lulusan S1 … yang saat ini bekerja sebagai … di …." /
   "I am a … graduate currently working as … at …."
 - strength_id / strength_en: 1-2 kalimat kekuatan kerja yang terbukti dari CV (bukan klise).
-
-{full_text_rule}
+- target_roles: 4-10 nama posisi yang realistis dilamar orang ini di portal lowongan Indonesia, berdasarkan
+  pengalaman kerja, magang, proyek, pendidikan, dan skill yang BENAR-BENAR tertulis. Urutkan dari yang paling kuat
+  buktinya. Ikuti isi CV apa adanya: CV yang mayoritas marketing/media sosial → posisi marketing/konten, bukan
+  developer; CV developer → posisi developer. Jangan menaikkan level (lulusan baru → junior/staff, bukan manager).
+  * title: nama posisi umum di iklan lowongan (mis. "Digital Marketing Staff", "Backend Developer").
+  * category: satu kode bidang: {categories}.
+  * basis: dasar dari CV, singkat dan spesifik (mis. "Marketing Officer Intern di PT X; skill Digital Marketing").
+- experiences / education: HANYA bila DATA CV menunjukkan daftar itu kosong ([]), salin dari TEKS CV
+  (experiences: company, role, employment_type, location, start, end, highlights; education: institution, degree,
+  major, start, end, gpa). Bila DATA CV sudah berisi, kembalikan [].
 
 Aturan ketat:
 - JANGAN mengarang, menebak, atau melengkapi data yang tidak tertulis. Tidak ada -> "" atau [].
 - Jangan pernah menulis null, "-", "N/A", "tidak ada", atau placeholder seperti [Nama].
-- Salin nama orang, nama perusahaan, email, nomor, dan link apa adanya; jangan "memperbaiki" ejaannya.
-- Periksa ulang setiap karakter hasil OCR (0/O, 1/l/I, 5/S, rn/m).
-- Kalimat yang kamu susun (summary, evidence, intro, strength) wajib berbahasa baku tanpa salah ketik,
-  tanpa tanda seru, tanpa klise ("sangat antusias", "pekerja keras", "passionate", "dynamic")."""
-
-_FULL_TEXT_NEEDED = "- full_text: transkripsi lengkap SELURUH teks CV apa adanya (pertahankan baris & urutan, tanpa ringkasan)."
-_FULL_TEXT_SKIP = '- full_text: isi string kosong "".'
+- Kalimat yang kamu susun wajib berbahasa baku tanpa salah ketik, tanpa tanda seru, tanpa klise
+  ("sangat antusias", "pekerja keras", "passionate", "dynamic")."""
 
 _S = {"type": "string"}
 _LIST_S = {"type": "array", "items": _S}
@@ -87,22 +85,19 @@ def _obj(props: dict) -> dict:
 
 
 _SCHEMA = _obj({
-    **{k: _S for k in FIELDS},
-    "skills": _LIST_S,
-    "experience_years": {"type": "integer"},
-    "experiences": {"type": "array", "items": _obj({
-        "company": _S, "role": _S, "employment_type": _S, "location": _S, "start": _S, "end": _S,
-        "highlights": _LIST_S})},
-    "projects": {"type": "array", "items": _obj({"name": _S, "role": _S, "tech": _LIST_S, "description": _S, "url": _S})},
-    "education": {"type": "array", "items": _obj({
-        "institution": _S, "degree": _S, "major": _S, "start": _S, "end": _S, "gpa": _S})},
-    "certifications": _LIST_S,
+    "summary_id": _S,
     "evidence": {"type": "array", "items": _obj({
         "source": _S, "text_id": _S, "text_en": _S,
         "categories": {"type": "array", "items": {"type": "string", "enum": list(CATEGORIES)}},
         "skills": _LIST_S})},
     **{k: _S for k in LETTER_KEYS},
-    "full_text": _S,
+    "target_roles": {"type": "array", "items": _obj({
+        "title": _S, "category": {"type": "string", "enum": list(CATEGORIES)}, "basis": _S})},
+    "experiences": {"type": "array", "items": _obj({
+        "company": _S, "role": _S, "employment_type": _S, "location": _S, "start": _S, "end": _S,
+        "highlights": _LIST_S})},
+    "education": {"type": "array", "items": _obj({
+        "institution": _S, "degree": _S, "major": _S, "start": _S, "end": _S, "gpa": _S})},
 })
 
 
@@ -113,8 +108,9 @@ class CvScanError(Exception):
 @dataclass
 class CvScan:
     fields: dict = field(default_factory=dict)      # data diri + skills + experience_years — tanpa None
-    text: str = ""                                  # teks CV (lapisan teks PDF atau hasil OCR AI)
-    method: str = "pattern"                         # "gemini" | "anthropic" | "pattern"
+    text: str = ""                                  # teks CV (lapisan teks PDF atau hasil OCR Tesseract)
+    method: str = "text"                            # sumber teks: "text" (PDF) | "ocr" (Tesseract)
+    ai: str = ""                                    # "gemini" | "anthropic" bila kesimpulan disusun AI
     note: str | None = None                         # alasan bila AI tidak dipakai / gagal
     experiences: list[dict] = field(default_factory=list)
     projects: list[dict] = field(default_factory=list)
@@ -122,6 +118,8 @@ class CvScan:
     certifications: list[str] = field(default_factory=list)
     evidence: list[dict] = field(default_factory=list)  # {text_id, text_en, categories, skills, source}
     letter: dict = field(default_factory=dict)          # intro_id/en, strength_id/en
+    targets: list[dict] = field(default_factory=list)   # {title, category, basis} — posisi yang cocok dilamar
+    links: list[str] = field(default_factory=list)     # hyperlink di PDF (LinkedIn/GitHub/portofolio)
 
     def to_data(self) -> dict:
         """Disimpan di cv_document.scan_data (tanpa teks CV, sudah ada di parsed_text)."""
@@ -137,54 +135,311 @@ class CvScan:
         return cls(text=text, **known)
 
 
-async def scan_cv(pdf: bytes, text_layer: str) -> CvScan:
-    s = get_settings()
-    text_layer = text_layer or ""
-    needs_ocr = len(text_layer.strip()) < MIN_TEXT_CHARS
-    note = None
+async def read_cv(pdf: bytes, text_layer: str, on_stage=None) -> CvScan:
+    """Tahap cepat (tanpa AI): 1) teks PDF, atau OCR lokal (Tesseract) bila PDF berupa gambar;
+    2) pemetaan data CV oleh kode. Kesimpulan AI menyusul lewat conclude()."""
+    async def stage(key: str) -> None:
+        if on_stage:
+            await on_stage(key)
+
+    await stage("text")
     links = pdf_links(pdf)
-    links_block = ("\n\nTautan (hyperlink) yang tertanam di PDF. Pakai untuk linkedin_url/portfolio_url/url proyek "
-                   "bila teksnya hanya tertulis \"LinkedIn\"/\"GitHub\"/\"Demo\":\n" + "\n".join(links)) if links else ""
-    if s.ai_ready:
-        prompt = _PROMPT.format(full_text_rule=_FULL_TEXT_NEEDED if needs_ocr else _FULL_TEXT_SKIP) + links_block
-        try:
-            if s.ai_provider == "gemini":
-                raw = await asyncio.wait_for(_gemini(pdf, prompt), AI_TIMEOUT_SECONDS)
-            else:
-                raw = await asyncio.wait_for(_claude(pdf, prompt), AI_TIMEOUT_SECONDS)
-            data = _parse_json(raw)
-            ocr_text = str(data.get("full_text") or "").strip()
-            text = ocr_text if needs_ocr and len(ocr_text) > len(text_layer.strip()) else text_layer
-            return build_scan(data, text, links, s.ai_provider or "pattern")
-        except Exception as exc:  # jaringan/kuota/key/JSON rusak — tetap lanjut dengan pola sederhana
-            log.warning("Scan CV dengan %s gagal: %s", s.ai_label, exc)
-            note = f"{s.ai_label} gagal membaca CV ({type(exc).__name__}); dipakai pembacaan sederhana."
+    text, method = (text_layer or "").strip(), "text"
+    if len(text) < MIN_TEXT_CHARS:
+        await stage("ocr")
+        from app.services.ocr import ocr_pdf
+
+        ocr_text = await asyncio.to_thread(ocr_pdf, pdf)
+        if len(ocr_text) > len(text):
+            text, method = ocr_text, "ocr"
+    await stage("map")
+    scan = pattern_scan(text, links)
+    scan.method = method
+    scan.links = links
+    if not text:
+        scan.note = "PDF tidak punya teks dan OCR tidak bisa membacanya (gambar terlalu buram?). Unggah PDF yang lebih jelas."
     else:
-        note = ("AI belum aktif, CV dibaca dengan pola sederhana (pengalaman, proyek, dan bukti CV tidak terisi). "
-                "Isi API key di Pengaturan untuk hasil lengkap.")
-    if not text_layer.strip():
-        note = f"{note} PDF tidak punya teks (hasil scan) dan tidak bisa dibaca tanpa AI."
-    return CvScan(heuristic_fields(text_layer + "\n" + "\n".join(links)), text_layer, "pattern", note)
+        draft_conclusions(scan)  # kolom surat & bukti langsung terisi dari fakta CV; versi AI menyusul
+    return scan
 
 
-def build_scan(data: dict, text: str, links: list[str], method: str) -> CvScan:
-    """Bersihkan + verifikasi jawaban AI terhadap isi CV (teks + hyperlink)."""
-    source = text + "\n" + "\n".join(links)
-    fields = verify_fields(_clean(data), source)
-    # Kolom yang terlewat AI tapi terbaca pola sederhana → lengkapi (sama-sama dari isi CV).
-    for key, value in heuristic_fields(source).items():
-        if key in ("full_name", "email", "phone", "linkedin_url", "portfolio_url") and not fields.get(key):
-            fields[key] = value
-    ctx = _Ctx(source)
-    return CvScan(
-        fields=fields, text=text, method=method,
-        experiences=_experiences(data.get("experiences"), ctx),
-        projects=_projects(data.get("projects"), ctx),
-        education=_education(data.get("education"), ctx),
-        certifications=[c for c in (_str(x) for x in _list(data.get("certifications"))) if c and ctx.numbers_ok(c)][:20],
-        evidence=_evidence(data.get("evidence"), ctx),
-        letter={k: (_sentence(v) if ctx.numbers_ok(v) else "") for k, v in ((k, _str(data.get(k))) for k in LETTER_KEYS)},
-    )
+_ID_WORDS = re.compile(r"\b(dan|yang|untuk|dengan|dalam|serta|membuat|mengembangkan|melakukan|mengelola|"
+                       r"menangani|membangun|melayani|menyusun|bertanggung)\b", re.I)
+
+
+def _join_id(items: list[str]) -> str:
+    return items[0] if len(items) == 1 else ", ".join(items[:-1]) + " dan " + items[-1]
+
+
+def _join_en(items: list[str]) -> str:
+    return items[0] if len(items) == 1 else ", ".join(items[:-1]) + " and " + items[-1]
+
+
+def _end(text: str) -> str:
+    text = text.strip()
+    return text if text.endswith((".", "!", "?")) else text + "."
+
+
+def draft_conclusions(scan: CvScan) -> None:
+    """Kalimat surat & bukti versi dasar TANPA AI — hanya dari data yang sudah dipetakan dari CV (tidak ada klaim
+    baru). Dipakai supaya kolom tidak kosong saat AI tidak aktif/sibuk; diganti versi AI begitu AI berhasil."""
+    from app.services.cv_targets import clean_role
+    from app.services.targeting import _SOFT_SKILL, classify_role
+
+    today = datetime.now(UTC).date()
+    exps = sorted((e for e in scan.experiences or [] if e.get("company")),
+                  key=lambda e: _month_index(e.get("end") or e.get("start"), is_end=True, today=today) or 0,
+                  reverse=True)
+    latest = exps[0] if exps else None
+    current = bool(latest and _NOW.search(latest.get("end") or ""))
+    edu = (scan.education or [None])[0]
+
+    # Perkenalan: pendidikan + pekerjaan terakhir/saat ini.
+    intro_id = intro_en = ""
+    if edu and (edu.get("major") or edu.get("institution")):
+        deg, major, inst = edu.get("degree") or "", edu.get("major") or "", edu.get("institution") or ""
+        intro_id = " ".join(p for p in ("Saya merupakan lulusan", deg, major) if p) + (f" dari {inst}" if inst else "")
+        intro_en = "I am a " + (f"{major} " if major else "") + "graduate" + (f" of {inst}" if inst else "")
+        if latest and latest.get("role"):
+            r, c = latest["role"], latest["company"]
+            intro_id += f" yang saat ini bekerja sebagai {r} di {c}" if current else f" dengan pengalaman sebagai {r} di {c}"
+            intro_en += f" currently working as {r} at {c}" if current else f" with experience as {r} at {c}"
+    elif latest and latest.get("role"):
+        r, c = latest["role"], latest["company"]
+        intro_id = f"Saya {'saat ini bekerja' if current else 'berpengalaman'} sebagai {r} di {c}"
+        intro_en = f"I {'currently work' if current else 'have worked'} as {r} at {c}"
+
+    # Kekuatan: skill teknis yang tertulis di CV (soft skill tidak diklaim).
+    skills = [s for s in (scan.fields or {}).get("skills", []) if not _SOFT_SKILL.match(s.strip())][:5]
+    strength_id = f"Saya terbiasa menggunakan {_join_id(skills)} dalam pekerjaan." if skills else ""
+    strength_en = f"I am experienced in working with {_join_en(skills)}." if skills else ""
+    scan.letter = {"intro_id": _end(intro_id) if intro_id else "", "intro_en": _end(intro_en) if intro_en else "",
+                   "strength_id": strength_id, "strength_en": strength_en}
+
+    # Bukti: satu per pengalaman, dari poin tugas & alat yang tertulis di bawah pengalaman itu.
+    vocab = list((scan.fields or {}).get("skills", [])) + known_skills(scan.text or "")
+    evidence = []
+    for e in exps[:6]:
+        role, company = e.get("role") or "", e["company"]
+        points = e.get("highlights") or []
+        used = matched_skills(" ".join(points), skills=vocab)[:5]
+        lead_id = f"Sebagai {role} di {company}" if role else f"Di {company}"
+        lead_en = f"As {role} at {company}" if role else f"At {company}"
+        first = points[0].strip() if points else ""
+        if first and _ID_WORDS.search(first):          # poin CV berbahasa Indonesia → kalimat utuh
+            text_id = _end(f"{lead_id}, saya {first[0].lower()}{first[1:]}")
+        elif used:
+            text_id = _end(f"{lead_id}, saya bekerja menggunakan {_join_id(used)}")
+        elif first:
+            text_id = _end(f"{lead_id}, saya menangani: {first}")
+        else:
+            continue                                    # tanpa isi tugas → tidak ada yang bisa dibuktikan
+        text_en = _end(f"{lead_en}: {first}") if first else _end(f"{lead_en}, I worked with {_join_en(used)}")
+        cat = classify_role(clean_role(role)) if role else RoleCategory.OTHER
+        evidence.append({"source": company, "text_id": text_id, "text_en": text_en,
+                         "categories": [] if cat == RoleCategory.OTHER else [cat.value], "skills": used})
+    scan.evidence = evidence
+
+
+async def conclude(scan: CvScan) -> CvScan:
+    """Tahap AI: ringkasan, bukti surat, kalimat surat, usulan posisi — dari teks + hasil pemetaan.
+    Melempar exception bila AI tidak aktif / gagal (pemanggil yang memutuskan coba lagi)."""
+    s = get_settings()
+    if not s.ai_ready:
+        raise CvScanError("AI belum aktif")
+    if not scan.text:
+        raise CvScanError("teks CV kosong")
+    mapped = {"full_name": scan.fields.get("full_name"), "skills": scan.fields.get("skills"),
+              "experiences": scan.experiences, "projects": scan.projects, "education": scan.education}
+    prompt = (_PROMPT.format(categories=_CATEGORY_HELP)
+              + "\n\nDATA CV (hasil pemetaan sistem):\n" + json.dumps(mapped, ensure_ascii=False)
+              + ("\n\nTautan di PDF:\n" + "\n".join(scan.links) if scan.links else "")
+              + "\n\nTEKS CV:\n<cv>\n" + scan.text[:30000] + "\n</cv>")
+    call = _gemini(prompt) if s.ai_provider == "gemini" else _claude(prompt)
+    data = _parse_json(await asyncio.wait_for(call, AI_TIMEOUT_SECONDS))
+    return add_conclusions(scan, data, scan.links, s.ai_provider or "")
+
+
+async def scan_cv(pdf: bytes, text_layer: str) -> CvScan:
+    """Baca + simpulkan sekaligus (dipakai bila worker/Redis tidak ada)."""
+    scan = await read_cv(pdf, text_layer)
+    s = get_settings()
+    if not scan.text:
+        return scan
+    if not s.ai_ready:
+        scan.note = ("AI belum aktif: data CV dipetakan dari teks; ringkasan Bahasa Indonesia, bukti surat, kalimat surat, "
+                     "dan usulan posisi tidak dibuat. Isi API key di Pengaturan.")
+        return scan
+    try:
+        return await conclude(scan)
+    except Exception as exc:  # jaringan/kuota/key/JSON rusak — data CV tetap ada dari pemetaan
+        log.warning("Kesimpulan CV dengan %s gagal: %s", s.ai_label, exc)
+        scan.note = (f"{s.ai_label} gagal menyusun kesimpulan ({type(exc).__name__}); data CV tetap dipetakan dari "
+                     "teks. Klik Pindai ulang beberapa saat lagi untuk bukti & kalimat surat.")
+        return scan
+
+
+def add_conclusions(scan: CvScan, data: dict, links: list[str], provider: str) -> CvScan:
+    """Kesimpulan AI, diverifikasi terhadap teks CV (angka, nama perusahaan/proyek, dasar target)."""
+    ctx = _Ctx(scan.text + "\n" + "\n".join(links))
+    summary = _str(data.get("summary_id"))
+    if summary and ctx.numbers_ok(summary):
+        scan.fields["summary"] = summary
+    if not scan.experiences:  # pemetaan tidak menemukan pengalaman (format CV tidak umum) → salinan AI, dicek
+        scan.experiences = _experiences(data.get("experiences"), ctx)
+        years = total_experience(scan.experiences, scan.projects)
+        if years["counted"]:
+            scan.fields["experience_years"] = years["years"]
+    if not scan.education:
+        scan.education = _education(data.get("education"), ctx)
+    if not scan.projects and data.get("projects"):
+        scan.projects = _projects(data.get("projects"), ctx)
+    # Versi AI menggantikan versi dasar; bagian yang tidak lolos pengecekan tetap memakai versi dasar.
+    scan.evidence = _evidence(data.get("evidence"), ctx, scan.fields.get("skills") or []) or scan.evidence
+    ai_letter = {k: (_sentence(v) if ctx.numbers_ok(v) else "") for k, v in ((k, _str(data.get(k))) for k in LETTER_KEYS)}
+    scan.letter = {k: ai_letter.get(k) or (scan.letter or {}).get(k, "") for k in LETTER_KEYS}
+    scan.targets = _targets(data.get("target_roles"), ctx)
+    scan.ai = provider
+    return scan
+
+
+_BASIS_STOP = {"dan", "and", "di", "at", "the", "dengan", "with", "skill", "skills", "pengalaman", "experience",
+               "sebagai", "as", "untuk", "for", "dari", "from", "proyek", "project", "magang", "intern", "pt", "pt."}
+
+
+def _targets(items, ctx: "_Ctx") -> list[dict]:
+    """Posisi target dari AI; hanya yang kategorinya valid dan dasarnya benar-benar tertulis di CV."""
+    out, seen = [], set()
+    for it in _list(items):
+        if not isinstance(it, dict):
+            continue
+        title, cat, basis = _str(it.get("title"))[:60], _str(it.get("category")).lower(), _str(it.get("basis"))[:200]
+        if not title or cat not in CATEGORIES or not basis or title.lower() in seen:
+            continue
+        words = [w for w in re.findall(r"[a-z0-9.+#]{3,}", basis.lower()) if w not in _BASIS_STOP]
+        if ctx.has_text and (not words or not any(w in ctx.low for w in words)):
+            continue  # dasar tidak ditemukan di CV → dianggap karangan
+        seen.add(title.lower())
+        out.append({"title": title, "category": cat, "basis": basis})
+    return out[:10]
+
+
+# ---------- lama pengalaman kerja ----------
+
+_MONTHS = {
+    "jan": 1, "januari": 1, "january": 1, "feb": 2, "februari": 2, "february": 2, "peb": 2, "pebruari": 2,
+    "mar": 3, "maret": 3, "march": 3, "apr": 4, "april": 4, "mei": 5, "may": 5,
+    "jun": 6, "juni": 6, "june": 6, "jul": 7, "juli": 7, "july": 7,
+    "agu": 8, "agt": 8, "ags": 8, "agus": 8, "agustus": 8, "aug": 8, "august": 8,
+    "sep": 9, "sept": 9, "september": 9, "okt": 10, "oktober": 10, "oct": 10, "october": 10,
+    "nov": 11, "nop": 11, "november": 11, "nopember": 11, "des": 12, "desember": 12, "dec": 12, "december": 12,
+}
+_NOW = re.compile(r"sekarang|saat ini|kini|present|current|now|ongoing|hingga kini|sampai sekarang", re.I)
+# Jenis kerja → label. Urutan penting: "magang" dicek sebelum "penuh waktu" (mis. "Magang penuh waktu").
+_TYPE_RULES = (
+    ("Magang", re.compile(r"magang|intern|internship|trainee|pkl|praktik kerja|kerja praktik|apprentice", re.I)),
+    ("Kontrak", re.compile(r"kontrak|contract|pkwt", re.I)),
+    ("Freelance", re.compile(r"freelance|lepas|self.?employed|wirausaha|wiraswasta|owner|founder", re.I)),
+    ("Paruh waktu", re.compile(r"paruh waktu|part.?time", re.I)),
+    ("Penuh waktu", re.compile(r"penuh waktu|full.?time|permanen|permanent|tetap|pkwtt", re.I)),
+)
+_NOT_WORK = re.compile(r"organisasi|organization|volunteer|relawan|kepanitiaan|komunitas|ukm|bem|himpunan", re.I)
+
+
+def _month_index(text: str, *, is_end: bool, today: date) -> int | None:
+    """'Oct 2023' / 'Oktober 2023' / '10/2023' / '2023-10' / '2023' / 'Sekarang' → tahun*12 + (bulan-1)."""
+    t = (text or "").strip().lower()
+    if not t:
+        return None
+    if _NOW.search(t):
+        return today.year * 12 + today.month - 1
+    year = re.search(r"(19|20)\d{2}", t)
+    if not year:
+        return None
+    y = int(year.group(0))
+    month = None
+    if m := re.search(r"\b(\d{1,2})\s*[/.-]\s*(?:19|20)\d{2}\b", t):      # 10/2023, 10-2023
+        month = int(m.group(1))
+    elif m := re.search(r"\b(?:19|20)\d{2}\s*[/.-]\s*(\d{1,2})\b", t):    # 2023-10, 2023/10
+        month = int(m.group(1))
+    if month is not None and not 1 <= month <= 12:
+        month = None
+    if month is None:
+        for word in re.findall(r"[a-z]+", t):
+            if word in _MONTHS:
+                month = _MONTHS[word]
+                break
+    if month is None:  # hanya tahun: awal = Januari, akhir = Desember (atau bulan ini bila tahun berjalan)
+        month = (today.month if y == today.year else 12) if is_end else 1
+    return y * 12 + month - 1
+
+
+def experience_type(exp: dict) -> str | None:
+    """Label jenis kerja; None = bukan pengalaman kerja (organisasi/relawan)."""
+    text = f"{exp.get('employment_type') or ''} {exp.get('role') or ''}"
+    if exp.get("employment_type") == "Proyek":
+        return "Proyek"
+    if _NOT_WORK.search(exp.get("employment_type") or ""):
+        return None
+    for label, pattern in _TYPE_RULES:
+        if pattern.search(text):
+            return label
+    return "Lainnya"
+
+
+def total_experience(experiences: list[dict], projects: list[dict] | None = None, today: date | None = None) -> dict:
+    """Lama pengalaman dari CV — aturan yang SAMA untuk semua CV: kerja (penuh waktu, kontrak, paruh waktu),
+    magang, freelance, dan proyek yang bertanggal. Organisasi tidak dihitung. Tumpang-tindih tidak dobel."""
+    items = list(experiences or [])
+    for proj in projects or []:
+        if proj.get("start"):
+            items.append({"company": proj.get("name") or "Proyek", "role": proj.get("role") or "",
+                          "employment_type": "Proyek", "start": proj.get("start"), "end": proj.get("end") or ""})
+    return experience_summary(items, today)
+
+
+def experience_summary(experiences: list[dict], today: date | None = None) -> dict:
+    """Total pengalaman kerja dari tanggal di CV: penuh waktu, kontrak, magang, freelance, paruh waktu, dan lainnya.
+
+    Periode yang tumpang-tindih digabung (tidak dihitung dobel). Bulan awal & akhir sama-sama dihitung
+    (Okt 2023 – Mar 2024 = 6 bulan). Tahun = dibulatkan ke bawah.
+    """
+    today = today or datetime.now(UTC).date()
+    periods: list[tuple[int, int]] = []
+    by_type: dict[str, int] = {}
+    skipped: list[str] = []
+    for exp in experiences or []:
+        kind = experience_type(exp)
+        name = exp.get("company") or exp.get("role") or "?"
+        if kind is None:
+            skipped.append(f"{name} (organisasi)")
+            continue
+        start = _month_index(exp.get("start"), is_end=False, today=today)
+        end = _month_index(exp.get("end"), is_end=True, today=today) if exp.get("end") else None
+        if end is None and start is not None and not exp.get("end"):
+            end = start  # tanpa tanggal akhir → dihitung 1 bulan saja
+        if start is None or end is None or end < start:
+            skipped.append(f"{name} (tanggal tidak terbaca)")
+            continue
+        periods.append((start, end))
+        by_type[kind] = by_type.get(kind, 0) + (end - start + 1)
+    total = 0
+    cur_s = cur_e = None
+    for s, e in sorted(periods):
+        if cur_e is not None and s <= cur_e + 1:
+            cur_e = max(cur_e, e)
+            continue
+        if cur_e is not None:
+            total += cur_e - cur_s + 1
+        cur_s, cur_e = s, e
+    if cur_e is not None:
+        total += cur_e - cur_s + 1
+    return {"months": total, "years": total // 12, "by_type": by_type, "counted": len(periods), "skipped": skipped}
+
+
+def months_text(months: int) -> str:
+    y, m = divmod(months, 12)
+    return " ".join(p for p in (f"{y} thn" if y else "", f"{m} bln" if m else "") if p) or "0 bln"
 
 
 def _sentence(text: str) -> str:
@@ -215,32 +470,44 @@ def pdf_links(pdf: bytes) -> list[str]:
 
 # ---------- AI ----------
 
-async def _gemini(pdf: bytes, prompt: str) -> str:
+async def _gemini(prompt: str) -> str:
     from google import genai
     from google.genai import errors, types
 
+    from app.services.letters import _thinking
+
     s = get_settings()
     client = genai.Client(api_key=s.gemini_api_key,
-                          http_options=types.HttpOptions(timeout=AI_TIMEOUT_SECONDS * 1000,
+                          http_options=types.HttpOptions(timeout=PER_MODEL_TIMEOUT_SECONDS * 1000,
                                                          retry_options=types.HttpRetryOptions(attempts=1)))
     models = [s.gemini_model] + [m for m in s.gemini_fallback_models if m != s.gemini_model]
     last: Exception | None = None
-    for model in models:
+    # Server Gemini penuh (503) biasanya pulih dalam hitungan detik: coba lagi sekali per model sebelum pindah.
+    attempts = [(m, n) for m in models for n in (1, 2)]
+    for model, attempt in attempts:
+        if attempt == 2:
+            if not isinstance(last, errors.ServerError):
+                continue  # timeout/kuota: langsung model berikutnya
+            await asyncio.sleep(4)
         try:
-            resp = await client.aio.models.generate_content(
+            # Batas waktu per model: model utama yang lambat tidak menghabiskan jatah model cadangan.
+            resp = await asyncio.wait_for(client.aio.models.generate_content(
                 model=model,
-                contents=[types.Part.from_bytes(data=pdf, mime_type="application/pdf"), prompt],
+                contents=[prompt],  # hanya teks CV + hasil pemetaan, bukan file PDF
                 config=types.GenerateContentConfig(
                     temperature=0,
                     max_output_tokens=65536,
                     response_mime_type="application/json",
                     response_schema=_SCHEMA,
+                    # Membaca CV = ekstraksi, bukan penalaran panjang: ikuti "Seberapa lama AI berpikir" (bawaan: cepat).
+                    thinking_config=_thinking(model, types),
                 ),
-            )
+            ), PER_MODEL_TIMEOUT_SECONDS)
             if resp.text:
                 return resp.text
             last = CvScanError("Gemini tidak mengembalikan jawaban.")
-        except errors.ServerError as exc:
+        except (errors.ServerError, TimeoutError) as exc:
+            log.warning("Kesimpulan CV dengan %s (percobaan %d) gagal/terlalu lama: %s", model, attempt, type(exc).__name__)
             last = exc
         except errors.ClientError as exc:
             if getattr(exc, "code", None) not in (404, 429):
@@ -249,7 +516,7 @@ async def _gemini(pdf: bytes, prompt: str) -> str:
     raise last or CvScanError("Gemini tidak tersedia.")
 
 
-async def _claude(pdf: bytes, prompt: str) -> str:
+async def _claude(prompt: str) -> str:
     import anthropic
 
     s = get_settings()
@@ -258,8 +525,6 @@ async def _claude(pdf: bytes, prompt: str) -> str:
         model=s.letter_model,
         max_tokens=32000,
         messages=[{"role": "user", "content": [
-            {"type": "document", "source": {"type": "base64", "media_type": "application/pdf",
-                                            "data": base64.b64encode(pdf).decode()}},
             {"type": "text", "text": prompt + "\n\nKeluarkan hanya satu objek JSON dengan kunci berikut, tanpa "
                                               "penjelasan dan tanpa ```:\n" + json.dumps(_SCHEMA)},
         ]}],
@@ -374,7 +639,12 @@ class _Ctx:
         """Semua angka di kalimat tertulis di CV (mencegah metrik karangan)."""
         if not self.has_text:
             return True
+        # Jenjang pendidikan (S1, S2, D3, D4) & kode seperti "B2B" bukan angka/metrik.
+        sentence = _DEGREE_CODE.sub(" ", sentence)
         return all(_num_key(n) in self.numbers for n in _NUM.findall(sentence))
+
+
+_DEGREE_CODE = re.compile(r"\b(?:[SD][1-4]|B2[BC]|C2C)\b", re.I)
 
 
 _SKILL_ALIASES = {
@@ -472,8 +742,9 @@ def _education(items, ctx: _Ctx) -> list[dict]:
     return out[:6]
 
 
-def _evidence(items, ctx: _Ctx) -> list[dict]:
-    cv_skills = set(matched_skills(ctx.low))
+def _evidence(items, ctx: _Ctx, skills: list[str]) -> list[dict]:
+    vocab = list(skills) + known_skills(ctx.low)  # skill yang tertulis di CV ini (bukan CV lain)
+    cv_skills = set(matched_skills(ctx.low, skills=vocab))
     out = []
     for it in _list(items):
         if not isinstance(it, dict):
@@ -488,7 +759,7 @@ def _evidence(items, ctx: _Ctx) -> list[dict]:
         cats = [c for c in _dedup(_str(x).lower() for x in _list(it.get("categories"))) if c in CATEGORIES]
         # Skill kanonik (sama dengan pencocokan lowongan), hanya yang memang ada di CV.
         named = " ".join(_str(x) for x in _list(it.get("skills")))
-        skills = [s for s in matched_skills(f"{named} {text_id}") if s in cv_skills]
+        skills = [s for s in matched_skills(f"{named} {text_id}", skills=vocab) if s in cv_skills]
         out.append({"source": src, "text_id": text_id, "text_en": text_en, "categories": cats, "skills": skills})
     return out[:8]
 
@@ -504,6 +775,34 @@ _NAME_LINE = re.compile(r"^[A-Za-z][A-Za-z.' -]{2,60}$")
 _HEADINGS = re.compile(
     r"^(curriculum vitae|cv|resume|profil|profile|about me|tentang saya|summary|contact|kontak|data diri)$", re.I)
 _YEARS = re.compile(r"(\d{1,2})\+?\s*(?:tahun|years?|yrs?)\s+(?:of\s+)?(?:pengalaman|experience)", re.I)
+
+
+def pattern_scan(text: str, links: list[str], note: str | None = None) -> CvScan:
+    """Pemetaan oleh kode (tanpa AI): data diri, ringkasan, pengalaman, proyek, pendidikan, skill — disalin dari teks."""
+    from app.services.cv_text import (
+        parse_address, parse_education, parse_experiences, parse_name, parse_projects, parse_skill_list,
+        parse_summary, split_sections,
+    )
+
+    fields = heuristic_fields(text + "\n" + "\n".join(links))
+    fields["full_name"] = parse_name(text) or fields.get("full_name", "")
+    fields["address"] = parse_address(text)
+    sections = split_sections(text)
+    experiences = parse_experiences(sections.get("experience", []))
+    fields["summary"] = parse_summary(sections)
+    from app.services.targeting import _canonical
+
+    listed = parse_skill_list(text, sections)
+    # Teknologi yang terdeteksi di teks hanya ditambahkan bila belum tercantum di daftar skill CV
+    # ("Go/Gin" sudah mencakup "Go", "React.js" sudah mencakup "React").
+    covered = {(_canonical(p) or p).lower() for s in listed for p in re.split(r"\s*/\s*", s)} | {s.lower() for s in listed}
+    fields["skills"] = _dedup(listed + [k for k in fields.get("skills", []) if k.lower() not in covered])[:30]
+    projects = parse_projects(sections.get("projects", []))
+    years = total_experience(experiences, projects)
+    if years["counted"]:
+        fields["experience_years"] = years["years"]
+    return CvScan(fields, text, "text", note, experiences=experiences, projects=projects,
+                  education=parse_education(sections.get("education", [])))
 
 
 def heuristic_fields(text: str) -> dict:
@@ -526,7 +825,7 @@ def heuristic_fields(text: str) -> dict:
         "linkedin_url": linkedin.group(0) if linkedin else "",
         "portfolio_url": (github or site).group(0) if (github or site) else "",
         "summary": "",
-        "skills": matched_skills(text),
+        "skills": known_skills(text),
     }
     if years:
         out["experience_years"] = int(years.group(1))

@@ -109,3 +109,16 @@ def rescore(job: Job) -> None:
     if email:
         job.hr_email = email
         job.apply_mode = ApplyMode.EMAIL
+
+
+async def rescore_all(session: AsyncSession) -> int:
+    """Hitung ulang kategori & skor semua lowongan terhadap target CV aktif (setelah CV/target berubah)."""
+    from app.services.targeting import load_target
+
+    await load_target(session)
+    count = 0
+    for job in (await session.scalars(select(Job))).all():
+        rescore(job)
+        count += 1
+    await session.commit()
+    return count

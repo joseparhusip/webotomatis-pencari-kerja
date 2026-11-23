@@ -14,7 +14,7 @@ from app.core.config import get_settings
 from app.models import Job, JobListing, Source
 from app.models.enums import JobStatus
 from app.services.ingest import rescore
-from app.services.targeting import IT_CATEGORIES
+from app.services.targeting import current_target
 
 log = logging.getLogger(__name__)
 
@@ -116,9 +116,10 @@ async def backfill(session: AsyncSession, source: Source, connector: Connector,
         select(JobListing).join(Job, Job.id == JobListing.job_id)
         .where(
             JobListing.source_id == source.id,
-            # Lowongan baru selalu dilengkapi; pembaruan berkala hanya untuk lowongan IT (yang ditampilkan).
+            # Lowongan baru selalu dilengkapi; pembaruan berkala hanya untuk bidang target CV aktif.
             or_(JobListing.detail_fetched_at.is_(None),
-                (JobListing.detail_fetched_at < now - REFRESH_AFTER) & Job.role_category.in_(list(IT_CATEGORIES))),
+                (JobListing.detail_fetched_at < now - REFRESH_AFTER)
+                & Job.role_category.in_([c.value for c in current_target().categories] or ["-"])),
             or_(Job.expires_at.is_(None), Job.expires_at > now),
             Job.status != JobStatus.HIDDEN,
         )

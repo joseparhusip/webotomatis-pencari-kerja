@@ -1,0 +1,27 @@
+{% set st = ai_status.state if ai_status else '' %}
+<div id="cv-ai-status">
+{% if st in ('queued', 'running', 'retry') %}
+  <div class="ai-status is-busy" role="status" aria-live="polite"
+       hx-get="/profile/ai-status?was=1" hx-trigger="every 3s" hx-target="#cv-ai-status" hx-swap="outerHTML">
+    <span class="spinner" aria-hidden="true"></span>
+    <div>
+      <strong>AI sedang menyusun ringkasan, bukti &amp; kalimat surat{% if main_cv %} dari "{{ main_cv.title }}"{% endif %}</strong>
+      <span class="meta">
+        {% if st == 'queued' %}Menunggu giliran di antrean…
+        {% elif st == 'running' %}Sedang diproses (percobaan {{ ai_status.attempt }}/{{ ai_status.max }})…
+        {% else %}{{ ai_status.message | capitalize }} — dicoba lagi otomatis dalam {{ ai_status.retry_in }} dtk (percobaan {{ ai_status.attempt }}/{{ ai_status.max }}).{% endif %}
+        Data CV lain (data diri, pengalaman, pendidikan, skill) sudah tersimpan. Halaman ini diperbarui otomatis saat selesai.
+      </span>
+    </div>
+  </div>
+{% elif st == 'failed' %}
+  <div class="ai-status is-failed" role="alert">
+    <span aria-hidden="true">▲</span>
+    <div>
+      <strong>AI belum berhasil menyusun ringkasan, bukti &amp; kalimat surat</strong>
+      <span class="meta">Sudah dicoba {{ ai_status.max }}× ({{ ai_status.message }}). Data CV lainnya tetap tersimpan.</span>
+    </div>
+    {% if main_cv %}<form method="post" action="/profile/cv/{{ main_cv.id }}/conclude" class="inline"><button class="btn" type="submit">Coba lagi</button></form>{% endif %}
+  </div>
+{% endif %}
+</div>

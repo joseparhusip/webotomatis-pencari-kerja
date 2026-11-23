@@ -99,6 +99,10 @@ class Connector(ABC):
         """Keyword pencarian untuk sumber ini (sumber berkuota bisa membatasi jumlahnya)."""
         return default
 
+    def keyword_label(self, keyword: str) -> str:
+        """Teks keyword untuk progres scraping."""
+        return f'"{keyword}"' if keyword else "semua lowongan"
+
     async def targets(self, session, default: list[str]) -> list[str]:
         """Daftar yang dicari per scraping (keyword, atau mis. username Instagram dari DB)."""
         return self.keywords(default)

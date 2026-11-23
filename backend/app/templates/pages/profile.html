@@ -11,6 +11,7 @@
 
   {% if ok %}<p class="flash flash-ok" role="status">{{ ok }}</p>{% endif %}
   {% if err %}<p class="flash flash-err" role="alert">{{ err }}</p>{% endif %}
+  {% include "partials/cv_ai_status.html" %}
 
   <div class="cols-2">
     <!-- Kolom kiri -->
@@ -41,7 +42,12 @@
             <input type="text" name="skills" value="{{ (profile.skills or []) | join(', ') if profile else '' }}" placeholder="dipisah koma"></label>
           <div class="grid-2">
             <label class="field"><span class="label">Pengalaman kerja (tahun)</span>
-              <input type="number" min="0" max="40" name="experience_years" value="{{ profile.experience_years if profile else 0 }}"></label>
+              <input type="number" min="0" max="40" name="experience_years" value="{{ profile.experience_years if profile else 0 }}">
+              {% if exp_summary and exp_summary.counted %}
+              <span class="hint">Dari CV: <strong>{{ months_text(exp_summary.months) }}</strong>
+                ({% for kind, m in exp_summary.by_type.items() %}{{ 'kerja (jenis tidak disebut)' if kind == 'Lainnya' else kind | lower }} {{ months_text(m) }}{% if not loop.last %} · {% endif %}{% endfor %}).
+                Dihitung dari kerja, magang, freelance, dan proyek bertanggal; organisasi tidak dihitung; periode tumpang-tindih tidak dobel.{% if exp_summary.skipped %} Tidak dihitung: {{ exp_summary.skipped | join(', ') }}.{% endif %}</span>
+              {% endif %}</label>
             <label class="field"><span class="label">Bahasa surat default</span>
               <select name="preferred_language">
                 <option value="id" {% if not profile or profile.preferred_language == 'id' %}selected{% endif %}>Indonesia</option>
@@ -49,6 +55,45 @@
               </select></label>
           </div>
           <button class="btn btn-primary" type="submit">Simpan data diri</button>
+        </form>
+      </section>
+
+      <section id="target" class="box">
+        <header class="box-h"><h2>Target pencarian</h2><span class="meta">Diisi otomatis dari CV utama{% if main_cv %} "{{ main_cv.title }}"{% endif %}. Menentukan lowongan yang di-scrape, skor kecocokan, dan filter awal di Lowongan.</span></header>
+        <form method="post" action="/profile/targets" class="box-b">
+          {% set chosen = profile.target_categories if profile else [] %}
+          <fieldset>
+            <legend class="label">Bidang yang dicari</legend>
+            {% for group, keys in [('IT', IT_ROLE_KEYS), ('Non-IT', NON_IT_ROLE_KEYS)] %}
+            <p class="role-group">{{ group }}</p>
+            <div class="checks">
+              {% for key in keys if key != 'other' %}
+              <label><input type="checkbox" name="categories" value="{{ key }}" {% if key in chosen %}checked{% endif %}> {{ ROLE_LABELS[key] }}</label>
+              {% endfor %}
+            </div>
+            {% endfor %}
+          </fieldset>
+          <label class="field"><span class="label">Keyword pencarian</span>
+            <textarea class="textarea" name="keywords" rows="3" placeholder="dipisah koma, mis. digital marketing, social media specialist">{{ (profile.target_keywords or []) | join(', ') if profile else '' }}</textarea>
+            <span class="hint">Dicari di semua portal (maks. 20). Kosong = diturunkan otomatis dari bidang & skill CV. JobStreet juga menyapu seluruh kategori yang sesuai bidang di atas.</span></label>
+          {% if target_plan and target_plan.basis %}
+          <details class="target-basis">
+            <summary>Dasar dari CV (kenapa bidang ini dipilih)</summary>
+            <ul>
+              {% for cat, reasons in target_plan.basis.items() %}
+              <li><strong>{{ ROLE_LABELS.get(cat, cat) }}</strong>{% if target_plan.weights.get(cat) %} <span class="meta">bobot {{ target_plan.weights[cat] }}</span>{% endif %}
+                <span class="meta">— {{ reasons | join(' · ') }}</span></li>
+              {% endfor %}
+            </ul>
+            {% if cv_scan and not cv_scan.targets %}<p class="hint">CV ini dipindai sebelum fitur target. Klik "Pindai ulang" pada CV utama agar AI ikut mengusulkan posisi yang cocok.</p>{% endif %}
+          </details>
+          {% endif %}
+          <div class="card-actions">
+            <button class="btn btn-primary" type="submit" {% if not profile %}disabled{% endif %}>Simpan target</button>
+            <span class="spacer"></span>
+            <button class="btn" type="submit" formaction="/profile/targets/from-cv" formnovalidate {% if not main_cv %}disabled{% endif %}
+                    data-confirm="Bidang & keyword di atas diganti dengan hasil baca CV utama." data-confirm-title="Hitung ulang dari CV?" data-confirm-ok="Ya, hitung ulang">Hitung ulang dari CV</button>
+          </div>
         </form>
       </section>
 
@@ -98,7 +143,7 @@
             <ul class="cv-points">{% for c in cv_scan.certifications %}<li>{{ c }}</li>{% endfor %}</ul>
             {% endif %}
             {% if not (cv_scan.experiences or cv_scan.projects or cv_scan.education) %}
-            <p class="empty-inline">Riwayat tidak terbaca{% if cv_scan.method == 'pattern' %} (AI belum aktif){% endif %}.</p>
+            <p class="empty-inline">Riwayat tidak terbaca dari teks CV (judul bagian seperti "Pengalaman" / "Experience" tidak ditemukan).</p>
             {% endif %}
           {% endif %}
         </div>
@@ -150,12 +195,12 @@
               <div class="card-actions">
                 <a href="/profile/cv/{{ cv.id }}/file" target="_blank" rel="noopener">Lihat PDF ↗</a>
                 {% if not cv.is_default %}
-                <form method="post" action="/profile/cv/{{ cv.id }}/default" class="inline" data-busy="Memproses…"
+                <form method="post" action="/profile/cv/{{ cv.id }}/default" class="inline" data-scan="Memakai CV ini" data-busy="Memproses…"
                       data-confirm="Data diri, pengalaman, proyek, bukti CV, dan kalimat surat akan diperbarui sesuai CV ini."
                       data-confirm-title="Pakai CV ini sebagai CV utama?" data-confirm-ok="Ya, pakai CV ini">
                   <button class="btn-link" type="submit">Pakai CV ini</button></form>
                 {% endif %}
-                <form method="post" action="/profile/cv/{{ cv.id }}/scan" class="inline" data-busy="Memindai…"{% if cv.is_default %}
+                <form method="post" action="/profile/cv/{{ cv.id }}/scan" class="inline" data-scan="Memindai ulang CV" data-busy="Memindai…"{% if cv.is_default %}
                       data-confirm="Profil akan diperbarui dengan hasil pindaian terbaru." data-confirm-title="Pindai ulang CV ini?" data-confirm-ok="Ya, pindai ulang"{% endif %}>
                   <button class="btn-link" type="submit">Pindai ulang</button></form>
                 <span class="spacer"></span>
@@ -174,7 +219,7 @@
           <p class="empty-inline">Belum ada CV. Lamaran via email butuh CV untuk dilampirkan.</p>
           {% endif %}
 
-          <form method="post" action="/profile/cv" enctype="multipart/form-data" class="upload" onsubmit="var b=this.querySelector('button[type=submit]'); b.disabled=true; b.textContent='Memindai CV…'">
+          <form method="post" action="/profile/cv" enctype="multipart/form-data" class="upload" data-scan="Mengunggah & memindai CV" onsubmit="var b=this.querySelector('button[type=submit]'); b.disabled=true; b.textContent='Memindai CV…'">
             <h3>Unggah CV baru</h3>
             <div class="card-row">
               <label class="field grow"><span class="label">File PDF (maks. 5 MB)</span>
@@ -186,7 +231,7 @@
             <label class="check-line"><input type="checkbox" name="make_active" checked> Jadikan CV utama &amp; perbarui profil dari CV ini
               <span class="meta">(data diri, pengalaman, proyek, pendidikan, bukti CV, kalimat surat)</span></label>
             {% if cvs %}<label class="check-line"><input type="checkbox" name="replace_old" checked> Hapus CV lama (diganti CV ini)</label>{% endif %}
-            <p class="hint scan-note">File disimpan di folder storage/cv. {% if ai_ready %}CV dibaca AI (PDF hasil scan/foto juga bisa), lalu setiap data dicocokkan ulang dengan isi CV; yang tidak tertulis di CV dibuang. Memindai butuh sekitar 30–90 detik.{% else %}AI belum aktif: hanya PDF berteks yang terbaca, dan hasil isian terbatas. Isi API key di <a href="/settings#konfigurasi">Pengaturan</a>.{% endif %}</p>
+            <p class="hint scan-note">File disimpan di folder storage/cv. Teks CV diambil dari PDF (PDF hasil scan/foto dibaca dengan OCR), lalu data diri, pengalaman, pendidikan, dan skill dipetakan langsung dari teks itu. {% if ai_ready %}AI hanya menyusun kesimpulan (ringkasan, bukti surat, kalimat surat, usulan posisi); setiap angka dan nama dicek ulang ke teks CV.{% else %}AI belum aktif: kesimpulan (bukti & kalimat surat) tidak dibuat. Isi API key di <a href="/settings#konfigurasi">Pengaturan</a>.{% endif %}</p>
           </form>
         </div>
       </section>
@@ -200,8 +245,7 @@
           {% if not evidence %}
           <div class="empty">
             <p>Belum ada bukti tersimpan di profil.</p>
-            <p class="meta">Surat template sementara memakai {{ default_evidence_count }} contoh bawaan dari CV. Salin supaya bisa diedit.</p>
-            <form method="post" action="/profile/evidence/import-defaults"><button class="btn" type="submit" {% if not profile %}disabled{% endif %}>Salin contoh bawaan</button></form>
+            <p class="meta">Bukti terisi otomatis saat CV dipindai dengan AI, atau tulis sendiri di bawah. Tanpa bukti, surat template tidak menyebut pengalaman apa pun.</p>
           </div>
           {% else %}
           <div class="stack">

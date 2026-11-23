@@ -33,12 +33,21 @@ class JobFilters:
 
     @classmethod
     def defaults(cls) -> "JobFilters":
-        """Filter awal sesuai profil target (ARCHITECTURE.md §3)."""
+        """Filter awal mengikuti CV aktif: bidang target, level sesuai lama pengalaman, lokasi domisili."""
+        from app.services.targeting import current_target, suitable_levels
+
+        t = current_target()
+        home = t.home_region
+        if home and (home.startswith(JABODETABEK_PROVINCE) or home in JABODETABEK_REGENCIES):
+            loc = "jabodetabek_remote"
+        elif home:
+            loc = f"wil:{home[:2]}"  # provinsi domisili
+        else:
+            loc = ""
         return cls(
-            # Semua pekerjaan IT; Non-IT tidak dicentang.
-            roles=[c.value for c in RoleCategory if c != RoleCategory.OTHER],
-            levels=["entry", "junior", "unknown"],
-            loc="jabodetabek_remote",
+            roles=[c.value for c in t.categories] or [c.value for c in RoleCategory if c != RoleCategory.OTHER],
+            levels=suitable_levels(t.experience_years),
+            loc=loc,
             posted_days=3,
             statuses=[JobStatus.NEW.value, JobStatus.SEEN.value, JobStatus.SAVED.value],
         )
