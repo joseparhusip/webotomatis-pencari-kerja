@@ -150,13 +150,17 @@
               <div class="card-actions">
                 <a href="/profile/cv/{{ cv.id }}/file" target="_blank" rel="noopener">Lihat PDF ↗</a>
                 {% if not cv.is_default %}
-                <form method="post" action="/profile/cv/{{ cv.id }}/default" class="inline" onsubmit="if (!confirm('Pakai CV ini sebagai CV utama? Data diri, pengalaman, proyek, bukti CV, dan kalimat surat akan diperbarui sesuai CV ini.')) return false; this.querySelector('button').textContent='Memproses…'">
+                <form method="post" action="/profile/cv/{{ cv.id }}/default" class="inline" data-busy="Memproses…"
+                      data-confirm="Data diri, pengalaman, proyek, bukti CV, dan kalimat surat akan diperbarui sesuai CV ini."
+                      data-confirm-title="Pakai CV ini sebagai CV utama?" data-confirm-ok="Ya, pakai CV ini">
                   <button class="btn-link" type="submit">Pakai CV ini</button></form>
                 {% endif %}
-                <form method="post" action="/profile/cv/{{ cv.id }}/scan" class="inline" onsubmit="{% if cv.is_default %}if (!confirm('Pindai ulang CV ini? Profil akan diperbarui dengan hasilnya.')) return false; {% endif %}this.querySelector('button').textContent='Memindai…'">
+                <form method="post" action="/profile/cv/{{ cv.id }}/scan" class="inline" data-busy="Memindai…"{% if cv.is_default %}
+                      data-confirm="Profil akan diperbarui dengan hasil pindaian terbaru." data-confirm-title="Pindai ulang CV ini?" data-confirm-ok="Ya, pindai ulang"{% endif %}>
                   <button class="btn-link" type="submit">Pindai ulang</button></form>
                 <span class="spacer"></span>
-                <form method="post" action="/profile/cv/{{ cv.id }}/delete" class="inline" onsubmit="return confirm('Hapus CV ini? File-nya ikut terhapus.')">
+                <form method="post" action="/profile/cv/{{ cv.id }}/delete" class="inline" data-confirm-tone="danger"
+                      data-confirm="File PDF-nya ikut terhapus dan tidak bisa dikembalikan." data-confirm-title="Hapus CV ini?">
                   <button class="btn-link text-danger" type="submit">Hapus</button></form>
               </div>
               {% if cv.parsed_text %}
@@ -223,7 +227,7 @@
                   <button class="btn" type="submit">Simpan</button>
                   <span class="spacer"></span>
                   <button class="btn-link text-danger" type="submit" formaction="/profile/evidence/{{ ev.id }}/delete" formnovalidate
-                          onclick="return confirm('Hapus bukti ini?')">Hapus</button>
+                          data-confirm="Bukti ini tidak akan dipakai lagi di surat lamaran." data-confirm-title="Hapus bukti ini?">Hapus</button>
                 </div>
               </form>
             </details>

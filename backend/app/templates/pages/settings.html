@@ -93,7 +93,8 @@
           <span class="spacer"></span>
           {% if cfg_has_overrides %}
           <button class="btn-link text-danger" type="submit" formaction="/settings/config/reset" formnovalidate
-                  onclick="return confirm('Hapus semua isian dari web dan kembali ke nilai .env?')">Kembali ke .env</button>
+                  data-confirm="Semua isian dari web dihapus dan aplikasi kembali memakai nilai di file .env."
+                  data-confirm-title="Kembali ke pengaturan .env?" data-confirm-ok="Ya, kembalikan">Kembali ke .env</button>
           {% endif %}
         </div>
       </form>
@@ -167,7 +168,8 @@
             <td>{% if a.last_error %}<span class="meta text-danger">▲ {{ a.last_error[:120] }}</span>{% else %}<span class="meta">—</span>{% endif %}</td>
             <td class="col-num">
               <form method="post" action="/settings/instagram/{{ a.id }}/toggle" class="inline"><button class="btn-link" type="submit">{{ 'Nonaktifkan' if a.is_active else 'Aktifkan' }}</button></form>
-              <form method="post" action="/settings/instagram/{{ a.id }}/delete" class="inline" onsubmit="return confirm('Hapus @{{ a.username }}?')"><button class="btn-link text-danger" type="submit">Hapus</button></form>
+              <form method="post" action="/settings/instagram/{{ a.id }}/delete" class="inline" data-confirm-tone="danger"
+                    data-confirm="Akun ini tidak dipantau lagi saat scraping." data-confirm-title="Hapus @{{ a.username }}?"><button class="btn-link text-danger" type="submit">Hapus</button></form>
             </td>
           </tr>
         {% endfor %}
