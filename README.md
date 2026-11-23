@@ -14,6 +14,28 @@ Surat itu dikirim lewat email bersama CV Anda.
 
 ---
 
+## Tampilan
+
+**Daftar lowongan.** Filter di kiri, progres scraping terakhir di atas, lowongan diurutkan menurut skor kecocokan dengan CV.
+
+![Daftar lowongan dengan filter dan skor kecocokan](docs/screenshots/lowongan.png)
+
+**Detail lowongan.** Isi lengkap dari situs sumber: gaji, batas lamar, persyaratan, skill (hijau = ada di CV), benefit, dan deskripsi.
+
+![Detail lowongan dengan skill yang cocok dengan CV](docs/screenshots/detail-lowongan.png)
+
+**Progres scraping.** Status tiap sumber saat scraping berjalan: kata kunci yang sedang dicari, jumlah lowongan diperiksa, dan lowongan baru.
+
+![Progres scraping per sumber lowongan](docs/screenshots/progres-scraping.png)
+
+**Pelacak lamaran.** Papan status dari Draft sampai Offer/Ditolak, beserta ringkasan dan kuota email harian.
+
+![Papan status lamaran](docs/screenshots/lamaran.png)
+
+> Nama posisi, perusahaan, logo, dan deskripsi lowongan pada screenshot sengaja diburamkan.
+
+---
+
 ## Daftar isi
 
 1. [Fitur](#fitur)
