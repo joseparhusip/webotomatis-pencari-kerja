@@ -381,7 +381,7 @@ docker compose exec web pytest -q                               # jalankan tes
 
 Nama sumber untuk `scrape`: `jobstreet`, `kalibrr`, `glints`, `dealls`, `lokerid`, `kitalulus`, `traveloka`, `googlejobs`, `instagram`.
 
-**Database dari luar Docker:** PostgreSQL terbuka di `localhost:5433` (user, password, dan nama database: `jobs`).
+**Database dari luar Docker:** PostgreSQL terbuka di `localhost:5434` (user, password, dan nama database: `jobs`).
 
 **Setelah mengubah model database** (untuk developer):
 
@@ -415,7 +415,7 @@ docker compose exec -u root web sh -c "alembic revision --autogenerate -m 'pesan
 | Gejala | Penyebab & solusi |
 |---|---|
 | `docker: command not found` / `Cannot connect to the Docker daemon` | Docker Desktop belum terbuka. Buka dulu, tunggu statusnya *running*. |
-| `port is already allocated` (8030 atau 5433) | Port dipakai aplikasi lain. Matikan aplikasi itu, atau ubah port kiri di `docker-compose.yml` (misalnya `"8080:8000"`). |
+| `port is already allocated` (8030 atau 5434) | Port dipakai aplikasi lain. Matikan aplikasi itu, atau ubah port kiri di `docker-compose.yml` (misalnya `"8080:8000"`). |
 | Halaman lowongan masih kosong | Scraping pertama butuh ±5–10 menit. Cek `docker compose logs -f worker`. |
 | Perubahan `.env` tidak terbaca | Jalankan `docker compose up -d --force-recreate web worker`. |
 | SMTP gagal login (`535`) | Pakai **App Password**, bukan password Gmail biasa. Pastikan 2-Step Verification aktif. |

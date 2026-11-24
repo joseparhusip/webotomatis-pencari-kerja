@@ -12,7 +12,7 @@ log = logging.getLogger(__name__)
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
-    database_url: str = "postgresql+asyncpg://jobs:jobs@localhost:5433/jobs"
+    database_url: str = "postgresql+asyncpg://jobs:jobs@localhost:5434/jobs"
     redis_url: str = "redis://localhost:6379"
 
     # AI penulis surat: Gemini dipakai bila terisi, lalu Claude, lalu template (tanpa AI).
