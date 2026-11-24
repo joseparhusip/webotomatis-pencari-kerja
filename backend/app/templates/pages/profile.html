@@ -193,7 +193,7 @@
                 {% if cv.parsed_text %}{{ cv.parsed_text | length | number_id }} karakter terbaca{% else %}<span class="text-warn">▲ teks tidak terbaca</span>{% endif %}
               </p>
               <div class="card-actions">
-                <a href="/profile/cv/{{ cv.id }}/file" target="_blank" rel="noopener">Lihat PDF ↗</a>
+                <a href="/profile/cv/{{ cv.id }}/file" target="_blank" rel="noopener" data-pdf-viewer="{{ cv.title }}">Lihat PDF</a>
                 {% if not cv.is_default %}
                 <form method="post" action="/profile/cv/{{ cv.id }}/default" class="inline" data-scan="Memakai CV ini" data-busy="Memproses…"
                       data-confirm="Data diri, pengalaman, proyek, bukti CV, dan kalimat surat akan diperbarui sesuai CV ini."

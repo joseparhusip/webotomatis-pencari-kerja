@@ -418,13 +418,14 @@ async def remove_cv(cv_id: int, session: AsyncSession = Depends(get_session)):
 
 
 @router.get("/cv/{cv_id}/file")
-async def cv_file(cv_id: int, session: AsyncSession = Depends(get_session)):
+async def cv_file(cv_id: int, download: str = "", session: AsyncSession = Depends(get_session)):
+    """PDF CV: tampil di dalam pop-up (inline), atau diunduh dengan ?download=1."""
     cv = await _cv(session, cv_id)
     path = svc.cv_path(cv)
     if not path.is_file():
         raise HTTPException(404, "File CV tidak ada di storage")
     return FileResponse(path, media_type="application/pdf", filename=f"{cv.title}.pdf",
-                        content_disposition_type="inline")
+                        content_disposition_type="attachment" if download else "inline")
 
 
 # ---------- bukti CV ----------

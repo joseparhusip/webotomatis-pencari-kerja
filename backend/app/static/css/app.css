@@ -763,3 +763,44 @@ tbody tr:hover { background: color-mix(in srgb, var(--accent-soft) 45%, transpar
 .scan-steps li.is-done .mark { border-color: var(--accent); background: var(--accent); color: var(--accent-ink); }
 .scan-steps li[hidden] { display: none; }
 .scan-foot { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--line); }
+
+/* ---------- Pop-up pratinjau PDF (pdf-viewer.js) ---------- */
+html.has-modal { overflow: hidden; }
+.pdf-modal { width: min(1040px, calc(100vw - 48px)); height: calc(100vh - 48px); max-width: none; max-height: none;
+  padding: 0; border: 0; border-radius: 18px; background: var(--surface); color: var(--ink); overflow: hidden;
+  box-shadow: 0 30px 80px rgba(0, 0, 0, .35), 0 6px 18px rgba(0, 0, 0, .12); }
+.pdf-modal::backdrop { background: rgba(14, 19, 17, .55); backdrop-filter: blur(3px); }
+.pdf-modal[open] { animation: pdf-in .22s cubic-bezier(.3, .7, .4, 1); }
+.pdf-modal[open]::backdrop { animation: fade-in .22s ease; }
+.pdf-modal.is-closing { animation: pdf-out .16s ease forwards; }
+.pdf-modal.is-closing::backdrop { animation: fade-out .16s ease forwards; }
+@keyframes pdf-in { from { opacity: 0; transform: translateY(14px) scale(.97); } }
+@keyframes pdf-out { to { opacity: 0; transform: translateY(8px) scale(.98); } }
+.pdf-card { display: flex; flex-direction: column; height: 100%; }
+.pdf-head { display: flex; align-items: center; gap: 12px; padding: 12px 14px 12px 18px;
+  border-bottom: 1px solid var(--line); background: var(--surface); }
+.pdf-icon { display: grid; place-items: center; width: 38px; height: 38px; border-radius: 11px; flex: none;
+  color: var(--accent-ink); background: linear-gradient(135deg, var(--accent-2, var(--accent)), var(--accent));
+  box-shadow: 0 6px 14px -6px var(--accent-glow, rgba(0, 0, 0, .3)); }
+.pdf-icon svg { width: 20px; height: 20px; }
+.pdf-title { display: grid; min-width: 0; flex: 1; }
+.pdf-title strong { font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pdf-actions { display: flex; align-items: center; gap: 8px; }
+.pdf-btn { height: 34px; padding: 0 12px; gap: 6px; text-decoration: none; }
+.pdf-btn svg { width: 16px; height: 16px; }
+.pdf-close { display: grid; place-items: center; width: 36px; height: 36px; margin-left: 2px; border-radius: 10px; }
+.pdf-close svg { width: 18px; height: 18px; }
+.pdf-body { position: relative; flex: 1; background: var(--surface-3, #e7ece9); }
+.pdf-frame { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; opacity: 0; transition: opacity .2s ease; }
+.pdf-modal.is-loaded .pdf-frame { opacity: 1; }
+.pdf-loading { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: 10px;
+  color: var(--ink-2); font-size: 14px; }
+.pdf-modal.is-loaded .pdf-loading { display: none; }
+@media (max-width: 640px) {
+  .pdf-modal { width: 100vw; height: 100dvh; border-radius: 0; }
+  .pdf-btn span { display: none; }
+  .pdf-btn { width: 36px; padding: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pdf-modal[open], .pdf-modal.is-closing, .pdf-modal[open]::backdrop, .pdf-modal.is-closing::backdrop { animation: none; }
+}
