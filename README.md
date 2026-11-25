@@ -365,6 +365,25 @@ Nama menu Meta bisa sedikit berbeda karena tampilannya rutin diperbarui.
 
 ## Perintah berguna
 
+**Shortcut `make`** (jalan di PowerShell, cmd, dan Git Bash). Ketik `make` untuk daftar lengkap.
+
+| Perintah | Fungsi |
+|---|---|
+| `make up` / `make down` / `make stop` | nyalakan / matikan + hapus container / matikan saja (data database tetap aman) |
+| `make build` | build ulang image lalu nyalakan (setelah ubah `requirements.txt` / `Dockerfile`) |
+| `make restart` / `make restart-worker` | muat ulang kode web + worker / worker saja |
+| `make ps` / `make status` | status container / status + cek web merespons |
+| `make logs` / `make logs s=worker` | log semua service / satu service |
+| `make migrate` / `make migration name=nama` | jalankan migrasi / buat migrasi baru |
+| `make backup` / `make restore file=backup-db.sql` | simpan / pulihkan database |
+| `make psql` / `make redis` | masuk PostgreSQL / redis-cli |
+| `make scrape` / `make scrape-now src=jobstreet` | scraping lewat worker / langsung untuk sumber tertentu |
+| `make rescore` / `make test` | hitung ulang skor lowongan / jalankan tes |
+
+Windows belum punya `make`? Pasang sekali: `winget install ezwinports.make`.
+
+Perintah Docker langsungnya:
+
 ```bash
 docker compose up -d                       # nyalakan (setelah restart komputer)
 docker compose down                        # matikan — data TETAP aman
