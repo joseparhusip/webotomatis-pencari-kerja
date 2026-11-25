@@ -114,6 +114,7 @@
             <label><input type="checkbox" name="status" value="{{ key }}" {% if key in f.statuses %}checked{% endif %}> {{ STATUS_LABELS[key] }}</label>
             {% endfor %}
           </div>
+          <p class="hint">Lowongan yang sudah dilamar atau disiapkan (draft), termasuk iklan yang dipasang ulang, tidak ditampilkan. Centang <b>Dilamar</b> untuk melihatnya.</p>
         </fieldset>
 
         <label class="field">
@@ -134,8 +135,16 @@
     <form id="apply-form" class="action-bar" hx-post="/applications/prepare" hx-disabled-elt="find button" hidden>
       <span><span id="sel-count" class="num">0</span> dipilih</span>
       <button class="btn" type="button" data-clear-selection>Batal pilih</button>
+      <button class="btn btn-excel" type="button" data-export-excel="selected"
+              title="Export lowongan yang dipilih ke Excel (perusahaan, gaji, deskripsi, link, sumber + analisis)">
+        <svg class="xls-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="3.5" width="17" height="17" rx="3" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M3.5 9.5h17M3.5 14.5h17M9.5 9.5v11" fill="none" stroke="currentColor" stroke-width="1.5"/></svg><span>Excel</span></button>
+      <button class="btn" type="button" hx-post="/jobs/mark-applied" hx-target="#list-flash" hx-swap="innerHTML"
+              hx-confirm="Lowongan yang dipilih dicatat sebagai sudah dilamar di situsnya (JobStreet, Glints, dll.), hilang dari daftar ini, dan masuk ke menu Lamaran."
+              data-confirm-title="Tandai sudah dilamar?" data-confirm-ok="Ya, sudah dilamar"
+              title="Untuk lowongan yang sudah kamu lamar langsung di situsnya">Sudah dilamar</button>
       <button class="btn btn-primary" type="submit">Siapkan lamaran</button>
     </form>
+    <div id="list-flash" aria-live="polite"></div>
     {% with compact = true %}{% include "partials/scrape_progress.html" %}{% endwith %}
     <div id="job-results" hx-get="/jobs" hx-include="#filter-form" hx-trigger="jobs-changed from:body">
       {% include "partials/job_results.html" %}

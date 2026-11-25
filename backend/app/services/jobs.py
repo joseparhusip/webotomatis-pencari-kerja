@@ -126,6 +126,36 @@ def search_clause(q: str):
     return and_(*per_word)
 
 
+def _norm(col):
+    """'PT. IDX Solusi' / 'FullStack Developer' → 'ptidxsolusi' / 'fullstackdeveloper' (pembanding iklan ulang)."""
+    return func.lower(func.regexp_replace(col, "[^a-zA-Z0-9]", "", "g"))
+
+
+def processed_clause():
+    """Lowongan yang sudah punya lamaran (draft s.d. hasil akhir), atau iklan pasang ulang dari lowongan itu."""
+    from sqlalchemy import exists
+    from sqlalchemy.orm import aliased
+
+    from app.models import Application
+
+    applied = aliased(Job)
+    has_application = exists().where(Application.job_id == Job.id)
+    repost = exists().where(
+        Application.job_id == applied.id,
+        _norm(applied.company_name) == _norm(Job.company_name),
+        _norm(applied.title) == _norm(Job.title),
+    )
+    return or_(has_application, repost)
+
+
+async def processed_hidden_count(session: AsyncSession, f: JobFilters) -> int:
+    """Berapa lowongan yang cocok filter tetapi disembunyikan karena sudah diproses (untuk keterangan di daftar)."""
+    if not f.statuses or JobStatus.APPLIED.value in f.statuses:
+        return 0
+    shown = build_query(replace(f, statuses=list(f.statuses) + [JobStatus.APPLIED.value], page=1))
+    return await session.scalar(select(func.count()).select_from(shown.where(processed_clause()).subquery())) or 0
+
+
 def build_query(f: JobFilters) -> Select:
     conds = []
     if f.q:
@@ -155,6 +185,10 @@ def build_query(f: JobFilters) -> Select:
         ))
     if f.statuses:
         conds.append(Job.status.in_(f.statuses))
+        if JobStatus.APPLIED.value not in f.statuses:
+            # Sudah diproses (draft, terkirim, dll. — ada di menu Lamaran) dan iklan pasang ulangnya
+            # (perusahaan + posisi sama, lokasi/ID beda) tidak ditampilkan lagi di daftar Lowongan.
+            conds.append(~processed_clause())
     # Lowongan yang batas lamarannya sudah lewat tidak ditampilkan.
     conds.append(or_(Job.expires_at.is_(None), Job.expires_at >= datetime.now(UTC)))
     return select(Job).where(and_(*conds))

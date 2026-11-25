@@ -5,13 +5,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}Lowongan{% endblock %} · Webotomatis</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%231E5B47'/%3E%3Ctext x='16' y='22' font-family='monospace' font-size='18' font-weight='700' fill='white' text-anchor='middle'%3EW%3C/text%3E%3C/svg%3E">
-  <link rel="stylesheet" href="/static/css/app.css">
-  <script src="/static/js/htmx.min.js" defer></script>
-  <script src="/static/js/app.js" defer></script>
-  <script src="/static/js/select.js" defer></script>
-  <script src="/static/js/confirm.js" defer></script>
-  <script src="/static/js/scan-loading.js" defer></script>
-  <script src="/static/js/pdf-viewer.js" defer></script>
+  <link rel="stylesheet" href="{{ static_url('css/app.css') }}">
+  <script src="{{ static_url('js/htmx.min.js') }}" defer></script>
+  <script src="{{ static_url('js/app.js') }}" defer></script>
+  <script src="{{ static_url('js/select.js') }}" defer></script>
+  <script src="{{ static_url('js/confirm.js') }}" defer></script>
+  <script src="{{ static_url('js/scan-loading.js') }}" defer></script>
+  <script src="{{ static_url('js/pdf-viewer.js') }}" defer></script>
 </head>
 <body>
   {% set active = active | default('jobs') %}

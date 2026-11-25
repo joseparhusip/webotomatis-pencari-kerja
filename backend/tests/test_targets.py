@@ -186,3 +186,14 @@ def test_pengalaman_sama_untuk_semua_cv_termasuk_proyek():
     assert only_work["months"] == 8 and only_work["years"] == 0
     assert with_projects["months"] == 8 + 12 + 4 and with_projects["years"] == 2   # proyek bertanggal ikut dihitung
     assert with_projects["by_type"]["Proyek"] == 16
+
+
+def test_lowongan_yang_sudah_diproses_disembunyikan_dari_daftar():
+    from app.services.jobs import JobFilters, build_query
+
+    def sql(f):
+        return str(build_query(f).compile(compile_kwargs={"literal_binds": True}))
+
+    default = sql(JobFilters(statuses=["new", "seen", "saved"]))
+    assert "application" in default and "regexp_replace" in default     # draft/terkirim + iklan pasang ulang
+    assert "application" not in sql(JobFilters(statuses=["new", "applied"]))   # centang "Dilamar" → tampil

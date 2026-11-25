@@ -804,3 +804,19 @@ html.has-modal { overflow: hidden; }
 @media (prefers-reduced-motion: reduce) {
   .pdf-modal[open], .pdf-modal.is-closing, .pdf-modal[open]::backdrop, .pdf-modal.is-closing::backdrop { animation: none; }
 }
+
+/* Tombol export Excel (daftar lowongan) */
+.btn-excel { gap: 7px; color: #1D6F42; border-color: #B7DCC6; background: #F1FAF4; font-weight: 600; }
+.btn-excel:hover { background: #E3F4EA; border-color: #8CC7A5; }
+.btn-excel .xls-icon { width: 17px; height: 17px; flex: none; }
+.btn-excel.is-busy .xls-icon { animation: spin .9s linear infinite; }
+.btn-export-all { margin-left: auto; }
+.results-head { align-items: center; }
+:root[data-theme="dark"] .btn-excel { color: #7FD6A5; background: #16271E; border-color: #2B4A39; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .btn-excel { color: #7FD6A5; background: #16271E; border-color: #2B4A39; }
+}
+/* sidebar filter: label panjang dibungkus, tanpa scroll ke samping */
+.filters { overflow-x: hidden; }
+
+#list-flash .flash { margin: 0 0 12px; }

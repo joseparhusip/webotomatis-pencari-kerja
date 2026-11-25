@@ -138,3 +138,19 @@ templates.env.globals.update(
     IT_ROLE_KEYS=IT_ROLE_KEYS, NON_IT_ROLE_KEYS=NON_IT_ROLE_KEYS, current_target=_current_target,
     EMPLOYMENT_LABELS=EMPLOYMENT_LABELS, STATUS_LABELS=STATUS_LABELS,
 )
+
+
+
+# Versi file statis (waktu ubah) di URL: browser langsung memakai CSS/JS terbaru, tidak tertahan cache lama.
+_STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
+
+
+def static_url(path: str) -> str:
+    try:
+        version = int((_STATIC_DIR / path).stat().st_mtime)
+    except OSError:
+        version = 0
+    return f"/static/{path}?v={version}"
+
+
+templates.env.globals["static_url"] = static_url

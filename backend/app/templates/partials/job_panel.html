@@ -38,11 +38,18 @@
     </form>
     {% if job.status.value == 'applied' %}
     <a class="btn" href="/applications">Sudah dilamar · lihat lamaran</a>
-    {% elif not expired %}
+    {% else %}
+    <button class="btn" type="button" hx-post="/jobs/mark-applied" hx-vals='{"job_id": "{{ job.id }}"}'
+            hx-target="#list-flash" hx-swap="innerHTML"
+            hx-confirm="Lowongan ini dicatat sudah dilamar di situsnya, hilang dari daftar Lowongan, dan masuk ke menu Lamaran."
+            data-confirm-title="Sudah melamar lowongan ini?" data-confirm-ok="Ya, sudah melamar"
+            title="Untuk lowongan yang sudah kamu lamar langsung di situsnya">Sudah saya lamar</button>
+    {% if not expired %}
     <form hx-post="/applications/prepare" class="inline">
       <input type="hidden" name="job_id" value="{{ job.id }}">
       <button class="btn btn-primary" type="submit" hx-disabled-elt="this">Siapkan lamaran</button>
     </form>
+    {% endif %}
     {% endif %}
   </div>
 

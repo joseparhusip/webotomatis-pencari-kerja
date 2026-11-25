@@ -21,6 +21,7 @@ from app.services.jobs import (
     list_jobs,
     recent_runs,
     hidden_matches,
+    processed_hidden_count,
     region_counts,
     search_outside_filters,
     source_counts,
@@ -86,6 +87,7 @@ async def jobs_page(
         "counts": await job_counts(session),
         "source_options": await source_counts(session, f),
         "outside": (await search_outside_filters(session, f.q)) if f.q and total == 0 else 0,
+        "processed_hidden": await processed_hidden_count(session, f),
         "hidden": (await hidden_matches(session, f)) if f.q and total == 0 else [],
         "outside_url": "/jobs?" + urlencode([("f", "1"), ("q", f.q), ("loc", ""), ("posted", "")]
                                            + [("status", s) for s in ("new", "seen", "saved", "applied")]),
@@ -108,6 +110,80 @@ async def _get_job(session: AsyncSession, job_id: int) -> Job:
     if job is None:
         raise HTTPException(404, "Lowongan tidak ditemukan")
     return job
+
+
+@router.post("/jobs/mark-applied", response_class=HTMLResponse)
+async def mark_jobs_applied(request: Request, session: AsyncSession = Depends(get_session)):
+    """Tandai lowongan sudah dilamar di situsnya (JobStreet, Glints, …) tanpa lewat aplikasi.
+    Draft yang sudah ada ikut jadi Terkirim; yang belum punya lamaran dicatat baru. Lowongan hilang dari
+    daftar Lowongan dan tercatat di menu Lamaran (kolom Terkirim)."""
+    from app.models import Application
+    from app.models.enums import ApplicationStatus, ApplyMode
+    from app.services.profile import default_cv, get_profile
+
+    form = await request.form()
+    ids = sorted({int(v) for v in form.getlist("job_id") if str(v).isdigit()})
+    if not ids:
+        return templates.TemplateResponse(request, "partials/flash.html",
+                                          {"msg": "Pilih lowongan dulu.", "ok": False})
+    now = datetime.now(UTC)
+    profile = await get_profile(session)
+    cv = await default_cv(session)
+    existing = {a.job_id: a for a in await session.scalars(select(Application).where(Application.job_id.in_(ids)))}
+    done = 0
+    for job in await session.scalars(select(Job).where(Job.id.in_(ids))):
+        app = existing.get(job.id)
+        if app is None:
+            session.add(Application(
+                job_id=job.id, cv_id=cv.id if cv else None, apply_mode=ApplyMode.PORTAL,
+                status=ApplicationStatus.SENT, sent_at=now,
+                letter_language=(profile.preferred_language if profile else "id") or "id",
+                notes="Dilamar langsung di situs lowongan (ditandai dari daftar Lowongan).",
+            ))
+        elif app.status in (ApplicationStatus.DRAFT, ApplicationStatus.FAILED):  # antrean email tidak diganggu
+            app.status, app.sent_at = ApplicationStatus.SENT, now
+            app.apply_mode = ApplyMode.PORTAL
+        job.status = JobStatus.APPLIED
+        done += 1
+    await session.commit()
+    resp = templates.TemplateResponse(request, "partials/flash.html", {
+        "msg": f"{done} lowongan ditandai sudah dilamar — tidak tampil lagi di sini, lihat di menu Lamaran (Terkirim).",
+        "ok": True})
+    resp.headers["HX-Trigger"] = "jobs-changed, close-drawer"
+    return resp
+
+
+EXPORT_LIMIT = 2000
+
+
+@router.get("/jobs/export.xlsx")
+async def export_jobs_xlsx(request: Request, session: AsyncSession = Depends(get_session)):
+    """Excel lowongan: yang dipilih (?ids=1,2,3) atau, tanpa ids, semua hasil filter yang sedang aktif.
+    Harus didaftarkan sebelum /jobs/{job_id}."""
+    from fastapi.responses import Response
+    from sqlalchemy import select
+
+    from app.models import Job
+    from app.services.jobs import build_query
+    from app.services.profile import get_profile
+    from app.web.jobs_export import build_jobs_workbook
+    from app.web.templating import WIB
+
+    ids = [int(x) for x in re.split(r"[,\s]+", request.query_params.get("ids", "")) if x.isdigit()][:EXPORT_LIMIT]
+    order = (Job.match_score.desc().nulls_last(), Job.posted_at.desc().nulls_last(), Job.id.desc())
+    if ids:
+        jobs = list(await session.scalars(select(Job).where(Job.id.in_(ids)).order_by(*order)))
+        scope, kind = f"{len(jobs)} lowongan dipilih", "terpilih"
+    else:
+        f = parse_filters(request)
+        jobs = list(await session.scalars(build_query(f).order_by(*order).limit(EXPORT_LIMIT)))
+        scope, kind = "semua hasil filter" + (f" (maks. {EXPORT_LIMIT})" if len(jobs) >= EXPORT_LIMIT else ""), "filter"
+    profile = await get_profile(session)
+    now = datetime.now(UTC)
+    data = build_jobs_workbook(jobs, list(profile.skills or []) if profile else [], scope, now)
+    name = f"lowongan-{kind}-{now.astimezone(WIB):%Y-%m-%d-%H%M}.xlsx"
+    return Response(data, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    headers={"Content-Disposition": f'attachment; filename="{name}"'})
 
 
 @router.get("/jobs/{job_id}", response_class=HTMLResponse)

@@ -35,7 +35,11 @@
     if (copyBtn) {
       const text = document.getElementById("letter")?.value || "";
       const url = copyBtn.dataset.copyOpen;
-      const done = () => { copyBtn.textContent = "Surat tersalin · lowongan dibuka ↗"; window.open(url, "_blank", "noopener"); };
+      const done = () => {
+        copyBtn.textContent = "Surat tersalin · lowongan dibuka ↗";
+        window.open(url, "_blank", "noopener");
+        askAppliedOnReturn();
+      };
       if (navigator.clipboard) navigator.clipboard.writeText(text).then(done, done); else done();
     }
 
@@ -44,6 +48,29 @@
       updateSelection();
     }
   });
+
+  // Setelah "Salin surat & buka lowongan": saat kembali ke tab ini, tanya apakah sudah melamar di situsnya,
+  // supaya lamaran tercatat & lowongan tidak menumpuk lagi di daftar Lowongan.
+  function askAppliedOnReturn() {
+    const btn = document.querySelector('[hx-post$="/mark-applied"]');
+    if (!btn || !window.uiConfirm || !window.htmx) return;
+    const leftAt = Date.now();
+    const onBack = () => {
+      if (document.visibilityState !== "visible" || Date.now() - leftAt < 3000) return;
+      document.removeEventListener("visibilitychange", onBack);
+      window.removeEventListener("focus", onBack);
+      window.uiConfirm({
+        title: "Sudah selesai melamar?",
+        message: "Kalau lamaran sudah kamu kirim di situs lowongan, tandai sekarang supaya tercatat di Lamaran dan tidak muncul lagi di daftar Lowongan.",
+        ok: "Ya, sudah melamar", cancel: "Belum",
+      }).then((yes) => { if (yes) window.htmx.ajax("POST", btn.getAttribute("hx-post"), { source: btn }); });
+    };
+    document.addEventListener("visibilitychange", onBack);
+    window.addEventListener("focus", onBack);
+  }
+
+  // Lowongan ditandai sudah dilamar dari panel detail → tutup panel.
+  document.body.addEventListener("close-drawer", () => closeDrawer());
 
   // Pilihan lowongan → action bar "Siapkan lamaran".
   function updateSelection() {
@@ -57,6 +84,43 @@
     if (e.target.matches('input[name="job_id"][form="apply-form"]')) updateSelection();
   });
   document.addEventListener("htmx:afterSwap", (e) => { if (e.detail.target.id === "job-results") updateSelection(); });
+
+  // Export Excel: lowongan yang dipilih, atau (tombol di judul daftar) semua hasil filter aktif.
+  document.addEventListener("click", async (e) => {
+    const btn = e.target.closest("[data-export-excel]");
+    if (!btn || btn.disabled) return;
+    const checked = [...document.querySelectorAll('input[name="job_id"][form="apply-form"]:checked')].map((c) => c.value);
+    let params;
+    if (btn.dataset.exportExcel === "selected" && checked.length) {
+      params = new URLSearchParams({ ids: checked.join(",") });
+    } else {
+      const form = document.getElementById("filter-form");
+      params = form ? new URLSearchParams(new FormData(form)) : new URLSearchParams();
+      params.delete("page");
+    }
+    const label = btn.querySelector("span");
+    const original = label.textContent;
+    btn.disabled = true;
+    btn.classList.add("is-busy");
+    label.textContent = "Menyiapkan…";
+    try {
+      const resp = await fetch(`/jobs/export.xlsx?${params}`);
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      const name = /filename="([^"]+)"/.exec(resp.headers.get("Content-Disposition") || "")?.[1] || "lowongan.xlsx";
+      const url = URL.createObjectURL(await resp.blob());
+      const a = Object.assign(document.createElement("a"), { href: url, download: name });
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+      label.textContent = "Terunduh ✓";
+    } catch (err) {
+      label.textContent = "Gagal, coba lagi";
+    } finally {
+      btn.classList.remove("is-busy");
+      setTimeout(() => { btn.disabled = false; label.textContent = original; }, 2200);
+    }
+  });
 
   // j/k = pindah baris, Enter = buka, Esc = tutup, / = cari
   document.addEventListener("keydown", (e) => {
