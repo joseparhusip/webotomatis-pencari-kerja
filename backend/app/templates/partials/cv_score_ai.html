@@ -2,10 +2,10 @@
 {% set busy = st in ('queued', 'running', 'retry') %}
 <section id="cv-score-ai" class="box cvs-ai{% if busy %} is-busy{% endif %}"
          {% if busy %}hx-get="/cv-score/{{ review.id }}/ai" hx-trigger="every 3s" hx-swap="outerHTML"{% endif %}>
-  <header class="box-h">
-    <h2>Kesimpulan</h2>
+  <header class="box-h cvs-ai-head">
+    <div class="cvs-ai-title"><h2>Kesimpulan</h2>
     {% if rv.ai %}<span class="tag tag-ok">disusun {{ {'gemini': 'Gemini', 'anthropic': 'Claude'}.get(rv.ai, rv.ai) }} · dicek ke CV</span>
-    {% elif not busy %}<span class="tag">tanpa AI · dari hasil penilaian</span>{% endif %}
+    {% elif not busy %}<span class="tag">tanpa AI · dari hasil penilaian</span>{% endif %}</div>
     <span class="meta">Skor tidak diubah AI. AI hanya boleh membahas kriteria di atas dan angka yang tertulis di CV.</span>
   </header>
 
@@ -36,7 +36,7 @@
       <div>
         <h3 class="cvs-crit-h">Kekuatan</h3>
         {% if rv.strengths %}
-        <ul class="cvs-list is-good">{% for s in rv.strengths %}<li><span class="tag">{{ crit_labels.get(s.criterion, s.criterion) }}</span> {{ s.text }}</li>{% endfor %}</ul>
+        <ul class="cvs-list is-good">{% for s in rv.strengths %}<li><span class="tag">{{ crit_labels.get(s.criterion, s.criterion) }}</span><p>{{ s.text }}</p></li>{% endfor %}</ul>
         {% else %}<p class="empty-inline">Belum ada kriteria yang terpenuhi penuh.</p>{% endif %}
       </div>
       <div>
@@ -44,7 +44,7 @@
         {% if rv.priorities %}
         <ol class="cvs-list is-fix">
           {% for p in rv.priorities %}
-          <li><span class="tag tag-warn">{{ crit_labels.get(p.criterion, p.criterion) }}</span> {{ p.text }}
+          <li><span class="tag tag-warn">{{ crit_labels.get(p.criterion, p.criterion) }}</span><p>{{ p.text }}</p>
             {% if p.before and p.after %}
             <div class="cvs-rewrite">
               <span class="cvs-before"><b>Sebelum</b>{{ p.before }}</span>

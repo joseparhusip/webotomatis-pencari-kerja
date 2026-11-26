@@ -50,7 +50,7 @@
         <h3 class="cvs-crit-h mt">Bukti di CV-mu</h3>
         <ul class="cvs-evidence">
           {% for sk in jex.strengths[:6] if sk.evidence %}
-          <li><span class="tag tag-ok">{{ sk.name }}</span> “{{ sk.evidence }}”</li>
+          <li><span class="tag tag-ok">{{ sk.name }}</span><q title="{{ sk.evidence }}">{{ sk.evidence }}</q></li>
           {% endfor %}
         </ul>
         {% endif %}

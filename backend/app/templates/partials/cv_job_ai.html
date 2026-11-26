@@ -19,14 +19,14 @@
     <div>
       <h3 class="cvs-crit-h">Yang perlu ditonjolkan</h3>
       {% if jrv.highlights %}
-      <ul class="cvs-list is-good">{% for h in jrv.highlights %}<li>{% if h.requirement %}<span class="tag">{{ h.requirement }}</span> {% endif %}{{ h.text }}
+      <ul class="cvs-list is-good">{% for h in jrv.highlights %}<li>{% if h.requirement %}<span class="tag">{{ h.requirement }}</span>{% endif %}<p>{{ h.text }}</p>
         {% if h.cv_line %}<span class="cvs-quote">“{{ h.cv_line }}”</span>{% endif %}</li>{% endfor %}</ul>
       {% else %}<p class="empty-inline">Belum ada syarat lowongan yang terlihat jelas di CV.</p>{% endif %}
     </div>
     <div>
       <h3 class="cvs-crit-h">Sesuaikan sebelum melamar</h3>
       {% if jrv.adjustments %}
-      <ol class="cvs-list is-fix">{% for a in jrv.adjustments %}<li><span class="tag tag-warn">{{ crit_labels.get(a.criterion, a.criterion) }}</span> {{ a.text }}
+      <ol class="cvs-list is-fix">{% for a in jrv.adjustments %}<li><span class="tag tag-warn">{{ crit_labels.get(a.criterion, a.criterion) }}</span><p>{{ a.text }}</p>
         {% if a.before and a.after %}<div class="cvs-rewrite"><span class="cvs-before"><b>Sebelum</b>{{ a.before }}</span><span class="cvs-after"><b>Sesudah</b>{{ a.after }}</span></div>{% endif %}
       </li>{% endfor %}</ol>
       {% else %}<p class="empty-inline">Tidak ada yang perlu disesuaikan.</p>{% endif %}

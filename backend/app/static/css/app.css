@@ -1140,3 +1140,28 @@ html.has-modal { overflow: hidden; }
 .btn-cancel[disabled] { opacity: .6; cursor: progress; }
 .sp-row.is-cancelled .sp-bar > span { background: var(--line-strong); }
 .sp-row.is-cancelled .sp-phase { color: var(--ink-3); }
+
+/* Kesimpulan & bukti: label di atas, teks di bawah — tidak bertabrakan bila teks panjang */
+.cvs-ai-head { display: grid; gap: 6px; }
+.cvs-ai-title { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; }
+.cvs-ai-title h2 { margin: 0; }
+.cvs-ai-grid { gap: 28px 40px; }
+.cvs-list { gap: 16px; padding-left: 22px; }
+.cvs-list li { padding-left: 4px; }
+.cvs-list li > .tag { display: inline-block; margin: 0 0 6px; white-space: normal; max-width: 100%; line-height: 18px; }
+.cvs-list li > p { margin: 0; line-height: 22px; color: var(--ink); overflow-wrap: anywhere; }
+.cvs-list .cvs-quote { margin-top: 8px; padding: 2px 0 2px 12px; line-height: 19px; }
+.cvs-list .cvs-rewrite { margin-top: 10px; gap: 8px; }
+.cvs-before, .cvs-after { gap: 4px; padding: 10px 14px; overflow-wrap: anywhere; }
+.cvs-job-ai > .cvs-crit-h { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+.cvs-job-ai .cvs-crit-h .tag { margin-left: 0; }
+.cvs-job-ai .cvs-verdict { margin-top: 4px; }
+.cvs-job-ai .hint { line-height: 19px; }
+.cvs-evidence { gap: 14px; }
+.cvs-evidence li { display: grid; gap: 6px; justify-items: start; }
+.cvs-evidence .tag { margin: 0; white-space: normal; }
+.cvs-evidence q { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+  padding-left: 12px; border-left: 2px solid var(--line-strong); color: var(--ink-2); overflow-wrap: anywhere; }
+.cvs-job-cols { gap: 28px 40px; }
+.cvs-crit li > div { gap: 4px; }
+.cvs-fix { margin-top: 2px; }
