@@ -79,9 +79,20 @@
     const n = document.querySelectorAll('input[name="job_id"][form="apply-form"]:checked').length;
     document.getElementById("sel-count").textContent = n;
     bar.hidden = n === 0;
+    // Kotak "pilih semua" di judul tabel: centang / setengah / kosong mengikuti baris.
+    const all = document.getElementById("sel-all");
+    if (all) {
+      const total = document.querySelectorAll('input[name="job_id"][form="apply-form"]').length;
+      all.disabled = total === 0;
+      all.checked = total > 0 && n === total;
+      all.indeterminate = n > 0 && n < total;
+    }
   }
   document.addEventListener("change", (e) => {
-    if (e.target.matches('input[name="job_id"][form="apply-form"]')) updateSelection();
+    if (e.target.id === "sel-all") {
+      document.querySelectorAll('input[name="job_id"][form="apply-form"]').forEach((c) => { c.checked = e.target.checked; });
+      updateSelection();
+    } else if (e.target.matches('input[name="job_id"][form="apply-form"]')) updateSelection();
   });
   document.addEventListener("htmx:afterSwap", (e) => { if (e.detail.target.id === "job-results") updateSelection(); });
 

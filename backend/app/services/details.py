@@ -129,7 +129,7 @@ async def backfill(session: AsyncSession, source: Source, connector: Connector,
     ok = fail = 0
     if on_progress and rows:
         await on_progress(0, len(rows))
-    sem = asyncio.Semaphore(DETAIL_CONCURRENCY)
+    sem = asyncio.Semaphore(max(1, getattr(connector, "detail_concurrency", DETAIL_CONCURRENCY)))
 
     async def download(listing: JobListing):
         async with sem:

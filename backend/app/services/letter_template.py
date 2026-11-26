@@ -31,7 +31,8 @@ class Evidence:
 
 SOURCE_LABELS = {"glints": "Glints", "jobstreet": "JobStreet", "kalibrr": "Kalibrr", "lokerid": "Loker.id",
                  "kitalulus": "KitaLulus", "dealls": "Dealls", "googlejobs": "Google Jobs",
-                 "instagram": "Instagram", "astra": "Astra Career", "traveloka": "Traveloka Careers"}
+                 "instagram": "Instagram", "astra": "Astra Career", "traveloka": "Traveloka Careers",
+                 "linkedin": "LinkedIn", "karirhub": "Karirhub Kemnaker"}
 
 # Item "skill" lowongan yang bukan teknologi (tidak disebut sebagai kekurangan).
 _SOFT = re.compile(r"komunikasi|communication|kerja ?sama|teamwork|english|bahasa|leadership|problem|analytical|"

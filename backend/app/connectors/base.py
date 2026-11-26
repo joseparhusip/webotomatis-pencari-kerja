@@ -80,6 +80,8 @@ class Connector(ABC):
     page_size: int = 30
     max_pages: int | None = None  # batas halaman khusus sumber ini (None = ikut setting global)
     detail_delay_seconds: float = 1.5
+    detail_concurrency: int = 3                 # halaman detail yang diambil bersamaan (situs ketat: 1)
+    page_delay_seconds: float | None = None     # jeda antar halaman/keyword pencarian (None = setting global)
 
     @abstractmethod
     async def search(

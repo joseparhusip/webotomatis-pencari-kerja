@@ -13,6 +13,7 @@ from app.web.config import router as config_router
 from app.web.cv_score import router as cv_score_router
 from app.web.profile import router as profile_router
 from app.web.routes import router
+from app.web.swipe import router as swipe_router
 
 log = logging.getLogger(__name__)
 
@@ -48,4 +49,5 @@ app.include_router(applications_router)
 app.include_router(config_router)
 app.include_router(cv_score_router)
 app.include_router(profile_router)
+app.include_router(swipe_router)
 app.include_router(router)

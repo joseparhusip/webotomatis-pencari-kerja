@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Swipe{% endblock %}
+{% block body %}
+<div class="page swipe-page">
+  <header class="swipe-intro">
+    <div>
+      <h1>Swipe lowongan</h1>
+      <p class="sub">Kanan = <b class="text-ok">cocok</b>, disimpan &amp; situsnya dibuka. Kiri = <b class="text-danger">lewati</b>.</p>
+    </div>
+    <p class="swipe-tally" id="swipe-tally" aria-live="polite" hidden>
+      <span class="is-like"><b data-n="like">0</b> cocok</span><span class="is-nope"><b data-n="nope">0</b> dilewati</span></p>
+  </header>
+
+  {% include "partials/swipe_stage.html" %}
+
+  <div class="swipe-actions" role="group" aria-label="Keputusan">
+    <button type="button" class="swipe-btn is-nope" data-swipe="nope" title="Lewati (←)">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>
+      <span>Lewati</span><kbd>←</kbd></button>
+    <button type="button" class="swipe-btn is-undo" data-swipe="undo" title="Urungkan (Backspace)" aria-label="Urungkan keputusan terakhir" disabled>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 7H4V2M4.6 7A8.5 8.5 0 1 1 3.5 13" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+    <button type="button" class="swipe-btn is-like" data-swipe="like" title="Cocok: simpan & buka situs sumber (→)">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20.5s-7.5-4.6-7.5-10.2A4.3 4.3 0 0 1 12 7.6a4.3 4.3 0 0 1 7.5 2.7c0 5.6-7.5 10.2-7.5 10.2z" fill="currentColor"/></svg>
+      <span>Cocok &amp; buka</span><kbd>→</kbd></button>
+  </div>
+</div>
+{% endblock %}

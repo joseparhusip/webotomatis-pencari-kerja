@@ -111,10 +111,13 @@ async def run_connector(connector: Connector, keywords: list[str] | None = None,
 
         try:
             async with new_http_client(settings.http_timeout_seconds) as client:
+                page_delay = connector.page_delay_seconds or settings.request_delay_seconds
                 for k_index, keyword in enumerate(keywords, 1):
                     await check_cancel()
                     if blocked:
                         break
+                    if k_index > 1:
+                        await asyncio.sleep(page_delay)  # jeda juga antar keyword, bukan hanya antar halaman
                     phase = (f"Mencari lowongan · {connector.keyword_label(keyword)}" if len(keywords) > 1
                              else "Mencari lowongan")
                     await progress.source(name, phase=phase)
@@ -150,7 +153,7 @@ async def run_connector(connector: Connector, keywords: list[str] | None = None,
                         await progress.source(name, found=found, new=new)
                         if not result.has_more:
                             break
-                        await asyncio.sleep(settings.request_delay_seconds)
+                        await asyncio.sleep(page_delay)
                     await progress.source(name, done=k_index)
 
                 # Halaman detail: isi lengkap lowongan baru + perbarui yang sudah lama (bisa diedit/ditutup).

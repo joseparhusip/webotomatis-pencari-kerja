@@ -5,7 +5,9 @@ from app.connectors.instagram import InstagramConnector
 from app.connectors.googlejobs import GoogleJobsConnector
 from app.connectors.jobstreet import JobStreetConnector
 from app.connectors.kalibrr import KalibrrConnector
+from app.connectors.karirhub import KarirhubConnector
 from app.connectors.kitalulus import KitaLulusConnector
+from app.connectors.linkedin import LinkedInConnector
 from app.connectors.lokerid import LokerIdConnector
 from app.connectors.traveloka import TravelokaConnector
 
@@ -20,6 +22,8 @@ REGISTRY: dict[str, Connector] = {
         LokerIdConnector(),
         KitaLulusConnector(),
         TravelokaConnector(),
+        LinkedInConnector(),
+        KarirhubConnector(),
         GoogleJobsConnector(),
         InstagramConnector(),
     )
