@@ -15,7 +15,7 @@ file    ?= backup-db.sql
 url     ?= http://localhost:8030
 
 .DEFAULT_GOAL := help
-.PHONY: help up build rebuild down stop start restart restart-web restart-worker ps logs logs-web logs-worker \
+.PHONY: help compose up build rebuild down stop start restart restart-web restart-worker ps logs logs-web logs-worker \
         migrate migration migrate-down migrate-status test test-x shell shell-worker psql redis \
         scrape scrape-now rescore details audit ig-check backup restore pull clean status
 
@@ -24,6 +24,7 @@ help:
 	$(info --------------------------------------------------------------------)
 	$(info DOCKER)
 	$(info   make up              nyalakan semua container: web, worker, postgres, redis)
+	$(info   make compose         sama dengan make up)
 	$(info   make build           build ulang image lalu nyalakan - setelah ubah requirements/Dockerfile)
 	$(info   make rebuild         build ulang TANPA cache lalu nyalakan)
 	$(info   make down            matikan dan hapus container - data database tetap AMAN di volume)
@@ -66,6 +67,8 @@ help:
 	@:
 
 # ---------- Docker ----------
+compose: up
+
 up:
 	$(COMPOSE) up -d
 	@echo Web: $(url)
