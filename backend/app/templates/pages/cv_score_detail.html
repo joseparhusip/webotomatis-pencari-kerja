@@ -1,0 +1,163 @@
+{% extends "base.html" %}
+{% block title %}Skor CV · {{ review.filename }}{% endblock %}
+{% block body %}
+{% set tone = 'ok' if r.score >= 70 else 'warn' if r.score >= 55 else 'danger' %}
+{% set m = r.market or {} %}
+<div class="page cvs-page">
+  <p class="cvs-back"><a href="/cv-score">‹ Skor CV</a></p>
+
+  <section class="box cvs-hero">
+    <div class="cvs-ring tone-{{ tone }}" style="--p: {{ r.score }}" role="img" aria-label="Skor {{ r.score }} dari 100">
+      <svg viewBox="0 0 120 120" aria-hidden="true">
+        <circle class="ring-bg" cx="60" cy="60" r="52"/>
+        <circle class="ring-val" cx="60" cy="60" r="52"/>
+      </svg>
+      <div class="ring-num"><b data-countup="{{ r.score }}">{{ r.score }}</b><span>/100</span></div>
+    </div>
+    <div class="cvs-hero-body">
+      <span class="cvs-grade tone-{{ tone }}">{{ r.grade }}</span>
+      <h1>{{ r.facts.name or review.filename }}</h1>
+      <p class="meta">{{ review.filename }} · {{ review.file_type | upper }} · teks {{ 'dibaca dengan OCR' if review.method == 'ocr' else 'langsung dari file' }}
+        · {{ r.facts.words | number_id }} kata · dinilai {{ review.created_at | date_id(True) }}</p>
+      <ul class="cvs-facts">
+        <li><b>{{ r.facts.experience_text or '0 bulan' }}</b><span>pengalaman terhitung</span></li>
+        <li><b>{{ r.facts.experiences }}</b><span>pengalaman</span></li>
+        <li><b>{{ r.facts.projects }}</b><span>proyek</span></li>
+        <li><b>{{ r.facts.skills | length }}</b><span>skill</span></li>
+      </ul>
+      {% if r.cap is not none and r.raw_score > r.score %}<p class="cvs-field-note is-warn mt">Dibatasi dari {{ r.raw_score }} karena CV belum nyambung dengan bidang yang dituju — <a href="#kenapa">lihat penjelasannya</a>.</p>{% endif %}
+      {% if r.assessed_max < 100 %}<p class="hint">Sebagian kriteria tidak bisa dinilai (lihat tanda "—"); skor dihitung dari {{ r.assessed_max }} poin yang bisa dinilai lalu diubah ke skala 100.</p>{% endif %}
+    </div>
+    <form method="post" action="/cv-score/{{ review.id }}/delete" class="cvs-del" data-confirm-tone="danger"
+          data-confirm="Hasil penilaian ini dihapus dari riwayat." data-confirm-title="Hapus hasil skor CV?">
+      <button class="btn-link text-danger" type="submit">Hapus</button>
+    </form>
+  </section>
+
+  {% if err %}<p class="flash flash-err mt" role="alert">{{ err }}</p>{% endif %}
+  {% include "partials/cv_job_section.html" %}
+
+  <h2 class="cvs-section-title">Kualitas CV secara umum</h2>
+  <div class="cvs-groups">
+    {% for g in r.groups %}
+    {% set gt = 'na' if g.na else 'ok' if g.pct >= 80 else 'warn' if g.pct >= 50 else 'danger' %}
+    <a class="cvs-group tone-{{ gt }}" href="#g-{{ g.key }}" style="--d: {{ loop.index0 * 60 }}ms">
+      <span class="cvs-group-label">{{ g.label }}</span>
+      <span class="cvs-group-num">{% if g.na %}—{% else %}{{ g.pct }}%{% endif %}</span>
+      <span class="cvs-bar"><span style="--w: {{ 0 if g.na else g.pct }}%"></span></span>
+      <span class="meta">{% if g.na %}tidak dinilai{% else %}{{ g.points | round(1) | replace('.0', '') }} / {{ g.max }} poin{% endif %}</span>
+    </a>
+    {% endfor %}
+  </div>
+
+  <section class="box cvs-why" id="kenapa">
+    <header class="box-h"><h2>Kenapa skornya {{ r.score }}?</h2>
+      <span class="meta">Penjelasan dari hitungan di bawah — bukan tebakan AI.</span></header>
+    <div class="box-b">
+      <div class="cvs-story">{% for p in ex.story %}<p>{{ p }}</p>{% endfor %}</div>
+      <p class="cvs-math"><span aria-hidden="true">∑</span> {{ ex.math }}</p>
+
+      {% if ex.losses %}
+      <h3 class="cvs-crit-h">Dari mana poin yang hilang</h3>
+      <ol class="cvs-loss">
+        {% for x in ex.losses %}
+        <li style="--d: {{ loop.index0 * 40 }}ms">
+          <span class="cvs-loss-pts">−{{ x.lost | round(1) | replace('.0', '') }}</span>
+          <div>
+            <strong>{{ x.label }}</strong>
+            <span>{{ x.why }}</span>
+            <span class="meta">Di CV-mu: {{ x.detail }}</span>
+          </div>
+        </li>
+        {% endfor %}
+      </ol>
+      {% if ex.potential > r.score %}
+      <p class="cvs-potential"><b>Bisa naik ke ±{{ ex.potential }}</b> bila {{ ex.potential_n }} hal teratas di atas diperbaiki
+        — tanpa mengarang isi, cukup melengkapi yang memang kamu punya.</p>
+      {% endif %}
+      {% else %}
+      <p class="cvs-potential"><b>Tidak ada poin yang hilang.</b> Semua kriteria yang bisa dinilai terpenuhi.</p>
+      {% endif %}
+
+      {% if ex.market or ex.field_note %}
+      <h3 class="cvs-crit-h">Dibandingkan dengan pasar kerja</h3>
+      {% if ex.field_note %}<p class="cvs-field-note{% if ex.field_tone %} is-{{ ex.field_tone }}{% endif %}">{{ ex.field_note }}</p>{% endif %}
+      {% if ex.market %}<p>{{ ex.market }}</p>{% endif %}
+      {% endif %}
+
+      <details class="cvs-refield"{% if ex.field_tone %} open{% endif %}>
+        <summary class="btn">Ganti bidang &amp; nilai ulang</summary>
+        <form method="post" action="/cv-score/{{ review.id }}/field" data-scan="Menilai ulang CV" data-scan-steps="rescore">
+          {% with sel = chosen_fields if field_mode == 'manual' else [], mark = detected_fields, mark_hint = 'bidang yang terlihat dari isi CV ini' %}
+          {% include "partials/cv_field_picker.html" %}
+          {% endwith %}
+          <button class="btn btn-primary" type="submit">Nilai ulang</button>
+          <span class="hint">Memakai teks yang sudah terbaca — tidak perlu unggah ulang. Kesimpulan AI ikut disusun ulang.</span>
+        </form>
+      </details>
+    </div>
+  </section>
+
+  {% include "partials/cv_score_ai.html" %}
+
+  <div class="cols-2 cvs-cols">
+    <section class="box">
+      <header class="box-h"><h2>Rincian 23 kriteria</h2><span class="meta">Dinilai kode dari isi CV — fakta di setiap baris bisa dicek di teks CV di bawah.</span></header>
+      <div class="box-b cvs-crit-wrap">
+        {% for key, label in CV_GROUPS.items() %}
+        <h3 id="g-{{ key }}" class="cvs-crit-h">{{ label }}</h3>
+        <ul class="cvs-crit">
+          {% for c in r.criteria if c.group == key %}
+          <li class="is-{{ c.status }}">
+            <span class="cvs-mark" aria-label="{{ {'ok': 'terpenuhi', 'partial': 'sebagian', 'miss': 'belum', 'na': 'tidak dinilai'}[c.status] }}">{{ {'ok': '✓', 'partial': '◐', 'miss': '✕', 'na': '—'}[c.status] }}</span>
+            <div>
+              <strong>{{ c.label }}</strong>
+              <span class="cvs-detail">{{ c.detail }}</span>
+              {% if c.fix %}<span class="cvs-fix">→ {{ c.fix }}</span>{% endif %}
+            </div>
+            <span class="cvs-pts">{% if c.status == 'na' %}—{% else %}{{ c.points | round(1) | replace('.0', '') }}/{{ c.max }}{% endif %}</span>
+          </li>
+          {% endfor %}
+        </ul>
+        {% endfor %}
+      </div>
+    </section>
+
+    <section class="box" id="market">
+      <header class="box-h"><h2>Dibandingkan dengan lowongan</h2>
+        <span class="meta">{% if m.jobs %}{{ m.jobs | number_id }} lowongan aktif terbaru bidang {{ m.label }} di database hasil scraping.{% elif m.categories %}Belum cukup lowongan bidang {{ m.label }} di database.{% else %}Bidang CV belum bisa ditentukan.{% endif %}</span></header>
+      <div class="box-b">
+        {% if m.top %}
+        <h3 class="cvs-crit-h">Skill paling dicari</h3>
+        <ul class="cvs-demand">
+          {% for t in m.top %}
+          <li class="{{ 'is-owned' if t.owned else 'is-gap' }}">
+            <span class="cvs-demand-name">{{ t.name }}</span>
+            <span class="cvs-bar"><span style="--w: {{ [t.pct * 100 // (m.top[0].pct or 1), 100] | min }}%"></span></span>
+            <span class="cvs-demand-n">{{ t.count | number_id }} <span class="meta">({{ t.pct }}%)</span></span>
+            <span class="tag {{ 'tag-ok' if t.owned else 'tag-warn' }}">{{ 'ada di CV' if t.owned else 'belum ada' }}</span>
+          </li>
+          {% endfor %}
+        </ul>
+        <p class="hint">Angka = jumlah lowongan yang menyebut skill itu. "Belum ada" hanya saran — cantumkan bila memang dikuasai.</p>
+        {% endif %}
+        {% if m.cv_skill_demand %}
+        <h3 class="cvs-crit-h mt">Skill di CV-mu yang dicari lowongan</h3>
+        <div class="chips">
+          {% for s in m.cv_skill_demand %}
+          <span class="chip {{ 'chip-match' if s.count else '' }}" title="{{ s.count }} lowongan">{{ s.name }} · {{ s.count | number_id }}</span>
+          {% endfor %}
+        </div>
+        {% endif %}
+        {% if not m.top and not m.cv_skill_demand %}<p class="empty-inline">Jalankan scraping dulu, lalu nilai ulang CV ini untuk melihat perbandingannya.</p>{% endif %}
+      </div>
+    </section>
+  </div>
+
+  <details class="box mt cvs-text">
+    <summary class="box-h"><h2>Teks yang terbaca</h2><span class="meta">{{ 'Hasil OCR' if review.method == 'ocr' else 'Teks langsung dari file' }} · semua penilaian berasal dari teks ini</span></summary>
+    <pre class="log cv-text">{{ (review.text or '')[:8000] }}{% if (review.text or '') | length > 8000 %}
+…{% endif %}</pre>
+  </details>
+</div>
+{% endblock %}

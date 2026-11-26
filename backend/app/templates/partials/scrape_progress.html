@@ -5,20 +5,34 @@
 {% if live or (prog and not compact) or recent %}
 <section class="box scrape-progress {% if live %}is-live{% endif %}" id="progres-scraping" aria-live="polite">
   <header class="sp-head">
-    {% if live %}<span class="spinner" aria-hidden="true"></span>{% else %}<span class="dot {{ 'dot-warn' if prog.errors else 'dot-ok' }}" aria-hidden="true"></span>{% endif %}
+    {% if live %}<span class="spinner" aria-hidden="true"></span>{% else %}<span class="dot {{ 'dot' if prog.cancelled else 'dot-warn' if prog.errors else 'dot-ok' }}" aria-hidden="true"></span>{% endif %}
     <div class="sp-title">
       {% if prog.state == 'queued' %}
         <strong>Memulai scraping…</strong>
         <span class="meta">{% if prog.stalled %}Worker belum merespons. Pastikan container <code>worker</code> & <code>redis</code> berjalan.{% else %}menunggu worker{% endif %}</span>
+      {% elif live and prog.cancelling %}
+        <strong>Membatalkan scraping…</strong>
+        <span class="meta">Berhenti setelah permintaan yang sedang berjalan selesai · {{ prog.new | number_id }} lowongan baru sudah tersimpan</span>
       {% elif live %}
         <strong>Scraping berjalan — {{ prog.percent }}%</strong>
         <span class="meta">{{ prog.done_count }} dari {{ prog.total_count }} sumber selesai · {{ prog.found | number_id }} lowongan diperiksa · <b>{{ prog.new | number_id }} baru</b> · {{ prog.elapsed | duration }}</span>
+      {% elif prog.cancelled %}
+        <strong>Scraping dibatalkan</strong>
+        <span class="meta">{{ prog.finished_at | date_id(true) }} · {{ prog.elapsed | duration }} · {{ prog.found | number_id }} lowongan diperiksa · <b>{{ prog.new | number_id }} baru tetap tersimpan</b></span>
       {% else %}
         <strong>Scraping selesai</strong>
         <span class="meta">{{ prog.finished_at | date_id(true) }} · {{ prog.elapsed | duration }} · {{ prog.found | number_id }} lowongan diperiksa · <b>{{ prog.new | number_id }} baru</b>{% if prog.errors %} · {{ prog.errors }} sumber bermasalah{% endif %}</span>
       {% endif %}
     </div>
-    {% if not live and compact %}<a class="btn-text" href="/settings#progres-scraping">Rincian</a>{% endif %}
+    {% if live %}
+    {# hx-preserve: tombol tidak ikut diganti saat panel diperbarui tiap 2 dtk, jadi klik tidak pernah "hilang". #}
+    <button id="scrape-cancel-btn" hx-preserve="true" class="btn btn-cancel" type="button" hx-post="/scrape/cancel" hx-swap="none"
+            {% if prog.cancelling %}disabled{% endif %}
+            hx-confirm="Scraping dihentikan setelah permintaan yang sedang berjalan selesai. Lowongan yang sudah diambil tetap tersimpan; sisanya diambil pada scraping berikutnya."
+            data-confirm-title="Batalkan scraping?" data-confirm-ok="Ya, batalkan" data-confirm-cancel="Lanjutkan scraping" data-confirm-tone="danger">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6.5" y="6.5" width="11" height="11" rx="2.5" fill="currentColor"/></svg>
+      <span class="lbl">{{ 'Membatalkan…' if prog.cancelling else 'Batalkan' }}</span></button>
+    {% elif compact %}<a class="btn-text" href="/settings#progres-scraping">Rincian</a>{% endif %}
   </header>
   <div class="meter sp-meter" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ prog.percent }}"><span style="width: {{ prog.percent }}%"></span></div>
   {% if not compact or live %}

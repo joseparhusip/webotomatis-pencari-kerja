@@ -63,3 +63,26 @@ class CvDocument(TimestampMixin, Base):
     is_default: Mapped[bool] = mapped_column(default=False)
     # Hasil scan CV (data diri, pengalaman, proyek, pendidikan, bukti, kalimat surat) — lihat services/cv_scan.py
     scan_data: Mapped[dict | None] = mapped_column(JSONB)
+
+
+class CvReview(TimestampMixin, Base):
+    """Hasil Skor CV. File-nya tidak disimpan — hanya teks yang terbaca, hasil penilaian, dan kesimpulan AI."""
+
+    __tablename__ = "cv_review"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    filename: Mapped[str] = mapped_column(String(200))
+    file_type: Mapped[str] = mapped_column(String(8))          # pdf | docx
+    source: Mapped[str] = mapped_column(String(20), default="upload")  # upload | profile (CV utama)
+    method: Mapped[str] = mapped_column(String(10), default="text")    # text | ocr
+    text: Mapped[str | None] = mapped_column(Text)
+    scan_data: Mapped[dict | None] = mapped_column(JSONB)      # hasil pemetaan CV (CvScan.to_data)
+    report: Mapped[dict | None] = mapped_column(JSONB)         # skor per kriteria (services/cv_score.py)
+    ai_review: Mapped[dict | None] = mapped_column(JSONB)      # kesimpulan AI yang lolos pengecekan
+    score: Mapped[int | None] = mapped_column(Integer)
+    # Kecocokan dengan satu lowongan (opsional): teks yang ditempel / lowongan dari daftar, hasil pencocokan & skornya.
+    job_id: Mapped[int | None] = mapped_column(ForeignKey("job.id", ondelete="SET NULL"))
+    job_title: Mapped[str | None] = mapped_column(String(255))
+    job_text: Mapped[str | None] = mapped_column(Text)
+    job_match: Mapped[dict | None] = mapped_column(JSONB)
+    job_score: Mapped[int | None] = mapped_column(Integer)

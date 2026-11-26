@@ -10,6 +10,7 @@ from fastapi.staticfiles import StaticFiles
 from app.core.config import get_settings
 from app.web.applications import router as applications_router
 from app.web.config import router as config_router
+from app.web.cv_score import router as cv_score_router
 from app.web.profile import router as profile_router
 from app.web.routes import router
 
@@ -45,5 +46,6 @@ app = FastAPI(title="Webotomatis Pencari Kerja", lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=Path(__file__).parent / "static"), name="static")
 app.include_router(applications_router)
 app.include_router(config_router)
+app.include_router(cv_score_router)
 app.include_router(profile_router)
 app.include_router(router)

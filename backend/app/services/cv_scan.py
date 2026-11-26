@@ -470,7 +470,7 @@ def pdf_links(pdf: bytes) -> list[str]:
 
 # ---------- AI ----------
 
-async def _gemini(prompt: str) -> str:
+async def _gemini(prompt: str, schema: dict | None = None) -> str:
     from google import genai
     from google.genai import errors, types
 
@@ -498,7 +498,7 @@ async def _gemini(prompt: str) -> str:
                     temperature=0,
                     max_output_tokens=65536,
                     response_mime_type="application/json",
-                    response_schema=_SCHEMA,
+                    response_schema=schema or _SCHEMA,
                     # Membaca CV = ekstraksi, bukan penalaran panjang: ikuti "Seberapa lama AI berpikir" (bawaan: cepat).
                     thinking_config=_thinking(model, types),
                 ),
@@ -516,7 +516,7 @@ async def _gemini(prompt: str) -> str:
     raise last or CvScanError("Gemini tidak tersedia.")
 
 
-async def _claude(prompt: str) -> str:
+async def _claude(prompt: str, schema: dict | None = None) -> str:
     import anthropic
 
     s = get_settings()
@@ -526,7 +526,7 @@ async def _claude(prompt: str) -> str:
         max_tokens=32000,
         messages=[{"role": "user", "content": [
             {"type": "text", "text": prompt + "\n\nKeluarkan hanya satu objek JSON dengan kunci berikut, tanpa "
-                                              "penjelasan dan tanpa ```:\n" + json.dumps(_SCHEMA)},
+                                              "penjelasan dan tanpa ```:\n" + json.dumps(schema or _SCHEMA)},
         ]}],
     )
     return "".join(b.text for b in resp.content if b.type == "text")

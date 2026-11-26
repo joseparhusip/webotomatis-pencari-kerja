@@ -14,6 +14,7 @@ log = logging.getLogger(__name__)
 
 SCAN_KEY = "webotomatis:cv-scan:{}"
 AI_KEY = "webotomatis:cv-ai:{}"
+REVIEW_AI_KEY = "webotomatis:cv-review-ai:{}"
 SCAN_TTL = 15 * 60
 AI_TTL = 24 * 60 * 60
 AI_MAX_TRIES = 6
@@ -23,6 +24,7 @@ STAGES = {
     "text": "Mengambil teks dari PDF",
     "ocr": "Membaca halaman dengan OCR (PDF berupa gambar)",
     "map": "Memetakan data CV (data diri, pengalaman, pendidikan, skill)",
+    "score": "Menilai CV & membandingkan dengan lowongan di database",
     "save": "Menyimpan ke profil",
     "done": "Selesai",
 }
@@ -66,18 +68,19 @@ async def get_stage(token: str | None) -> dict | None:
     return await _get(SCAN_KEY.format(token)) if token else None
 
 
-async def set_ai(cv_id: int, state: str, attempt: int = 0, message: str = "", retry_in: int = 0) -> None:
-    """state: queued | running | retry | done | failed."""
-    await _set(AI_KEY.format(cv_id), {
+async def set_ai(cv_id: int, state: str, attempt: int = 0, message: str = "", retry_in: int = 0,
+                 key: str = AI_KEY) -> None:
+    """state: queued | running | retry | done | failed. key=REVIEW_AI_KEY untuk Skor CV."""
+    await _set(key.format(cv_id), {
         "state": state, "attempt": attempt, "max": AI_MAX_TRIES, "message": message,
         "retry_at": time.time() + retry_in if retry_in else 0, "at": time.time(),
     }, AI_TTL)
 
 
-async def get_ai(cv_id: int | None) -> dict | None:
+async def get_ai(cv_id: int | None, key: str = AI_KEY) -> dict | None:
     if not cv_id:
         return None
-    data = await _get(AI_KEY.format(cv_id))
+    data = await _get(key.format(cv_id))
     if data and data.get("retry_at"):
         data["retry_in"] = max(0, int(data["retry_at"] - time.time()))
     return data

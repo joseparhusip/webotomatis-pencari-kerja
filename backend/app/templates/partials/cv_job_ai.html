@@ -1,0 +1,37 @@
+{% set st = ai_status.state if ai_status else '' %}
+{% set busy = st in ('queued', 'running', 'retry') and not jrv.ai %}
+<div id="cv-job-ai" class="cvs-job-ai{% if busy %} is-busy{% endif %}"
+     {% if busy %}hx-get="/cv-score/{{ review.id }}/job-ai" hx-trigger="every 3s" hx-swap="outerHTML"{% endif %}>
+  <h3 class="cvs-crit-h mt">Kesimpulan untuk lowongan ini
+    {% if jrv.ai %}<span class="tag tag-ok">disusun {{ {'gemini': 'Gemini', 'anthropic': 'Claude'}.get(jrv.ai, jrv.ai) }} · dicek ke CV &amp; lowongan</span>
+    {% elif not busy %}<span class="tag">tanpa AI · dari hasil pencocokan</span>{% endif %}</h3>
+  {% if busy %}
+  <div class="ai-status is-busy" role="status" aria-live="polite"><span class="spinner" aria-hidden="true"></span>
+    <div><strong>{{ ai_label }} sedang menimbang CV-mu untuk lowongan ini…</strong>
+      <span class="meta">Diperbarui otomatis. Skor di atas tidak berubah.</span></div></div>
+  <div class="skeleton" aria-hidden="true"><span></span><span></span><span class="short"></span></div>
+  {% else %}
+  <div class="cvs-verdict">
+    <span class="cvs-decision is-{{ {'lamar': 'siap', 'lamar_sesuaikan': 'perbaiki_sedikit', 'jangan_dulu': 'perbaiki_dulu'}.get(jrv.decision, '') }}">{{ JOB_DECISIONS.get(jrv.decision, '') }}</span>
+    <p>{{ jrv.verdict }}</p>
+  </div>
+  <div class="cvs-ai-grid">
+    <div>
+      <h3 class="cvs-crit-h">Yang perlu ditonjolkan</h3>
+      {% if jrv.highlights %}
+      <ul class="cvs-list is-good">{% for h in jrv.highlights %}<li>{% if h.requirement %}<span class="tag">{{ h.requirement }}</span> {% endif %}{{ h.text }}
+        {% if h.cv_line %}<span class="cvs-quote">“{{ h.cv_line }}”</span>{% endif %}</li>{% endfor %}</ul>
+      {% else %}<p class="empty-inline">Belum ada syarat lowongan yang terlihat jelas di CV.</p>{% endif %}
+    </div>
+    <div>
+      <h3 class="cvs-crit-h">Sesuaikan sebelum melamar</h3>
+      {% if jrv.adjustments %}
+      <ol class="cvs-list is-fix">{% for a in jrv.adjustments %}<li><span class="tag tag-warn">{{ crit_labels.get(a.criterion, a.criterion) }}</span> {{ a.text }}
+        {% if a.before and a.after %}<div class="cvs-rewrite"><span class="cvs-before"><b>Sebelum</b>{{ a.before }}</span><span class="cvs-after"><b>Sesudah</b>{{ a.after }}</span></div>{% endif %}
+      </li>{% endfor %}</ol>
+      {% else %}<p class="empty-inline">Tidak ada yang perlu disesuaikan.</p>{% endif %}
+      {% if jex and jex.gaps %}<p class="hint mt">Skill yang belum ada ({{ jex.gaps[:6] | join(', ') }}) jangan ditulis di CV bila belum dikuasai — jadikan target belajar.</p>{% endif %}
+    </div>
+  </div>
+  {% endif %}
+</div>

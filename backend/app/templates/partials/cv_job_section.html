@@ -1,0 +1,74 @@
+{# Kecocokan CV dengan satu lowongan. Variabel: review, jm, jex, jrv, ai_status … (lihat _ai_context) #}
+<section class="box cvs-job" id="lowongan">
+  {% if jm %}
+  {% set jt = 'ok' if jm.score >= 65 else 'warn' if jm.score >= 45 else 'danger' %}
+  <header class="cvs-job-head">
+    <div class="cvs-ring cvs-ring-sm tone-{{ jt }}" style="--p: {{ jm.score }}" role="img" aria-label="Kecocokan {{ jm.score }} dari 100">
+      <svg viewBox="0 0 120 120" aria-hidden="true"><circle class="ring-bg" cx="60" cy="60" r="52"/><circle class="ring-val" cx="60" cy="60" r="52"/></svg>
+      <div class="ring-num"><b data-countup="{{ jm.score }}">{{ jm.score }}</b><span>/100</span></div>
+    </div>
+    <div class="cvs-job-title">
+      <span class="label">Kecocokan dengan lowongan</span>
+      <h2>{{ jm.job.title or review.job_title or 'Lowongan' }}</h2>
+      <span class="cvs-grade tone-{{ jt }}">{{ jm.grade }}</span>
+      {% if review.job_id %}<a class="btn-link cvs-job-link" href="/jobs/{{ review.job_id }}">lihat lowongan ›</a>{% endif %}
+      {% if jm.cap is not none and jm.raw_score > jm.score %}<p class="cvs-field-note is-warn mt">Dibatasi dari {{ jm.raw_score }} karena {{ jm.cap_reason }}.</p>{% endif %}
+    </div>
+  </header>
+
+  <div class="box-b">
+    <div class="cvs-story">{% for p in jex.story %}<p>{{ p }}</p>{% endfor %}</div>
+    <p class="cvs-math"><span aria-hidden="true">∑</span> {{ jex.math }}</p>
+
+    <div class="cols-2 cvs-job-cols">
+      <div>
+        <h3 class="cvs-crit-h">Syarat lowongan vs CV-mu</h3>
+        <ul class="cvs-crit">
+          {% for c in jm.criteria %}
+          <li class="is-{{ c.status }}">
+            <span class="cvs-mark">{{ {'ok': '✓', 'partial': '◐', 'miss': '✕', 'na': '—'}[c.status] }}</span>
+            <div><strong>{{ c.label }}</strong><span class="cvs-detail">{{ c.detail }}</span>
+              {% if c.fix %}<span class="cvs-fix">→ {{ c.fix }}</span>{% endif %}</div>
+            <span class="cvs-pts">{% if c.status == 'na' %}—{% else %}{{ c.points | round(1) | replace('.0', '') }}/{{ c.max }}{% endif %}</span>
+          </li>
+          {% endfor %}
+        </ul>
+      </div>
+      <div>
+        {% if jm.skills %}
+        <h3 class="cvs-crit-h">Skill yang diminta ({{ jm.skills | length }})</h3>
+        <div class="chips job-skills">
+          {% for sk in jm.skills %}
+          <span class="chip {{ 'chip-match' if sk.status == 'list' else 'chip-text' if sk.status == 'text' else 'chip-gap' }}"
+                title="{{ {'list': 'Ada di daftar skill CV', 'text': 'Disebut di uraian CV, belum di daftar skill', 'missing': 'Belum ada di CV'}[sk.status] }}">
+            {{ '✓' if sk.status == 'list' else '≈' if sk.status == 'text' else '✕' }} {{ sk.name }}</span>
+          {% endfor %}
+        </div>
+        <p class="hint">✓ ada di daftar skill · ≈ hanya disebut di uraian · ✕ belum ada di CV</p>
+        {% endif %}
+        {% if jex.strengths %}
+        <h3 class="cvs-crit-h mt">Bukti di CV-mu</h3>
+        <ul class="cvs-evidence">
+          {% for sk in jex.strengths[:6] if sk.evidence %}
+          <li><span class="tag tag-ok">{{ sk.name }}</span> “{{ sk.evidence }}”</li>
+          {% endfor %}
+        </ul>
+        {% endif %}
+      </div>
+    </div>
+
+    {% include "partials/cv_job_ai.html" %}
+
+    <details class="cvs-refield">
+      <summary class="btn">Cek dengan lowongan lain</summary>
+      {% include "partials/cv_job_form.html" %}
+    </details>
+    <details class="mt"><summary class="meta">Teks lowongan yang dibaca</summary>
+      <pre class="log cv-text">{{ (review.job_text or '')[:6000] }}</pre></details>
+  </div>
+  {% else %}
+  <header class="box-h"><h2>Kecocokan dengan lowongan</h2>
+    <span class="meta">Tempel lowongan yang mau dilamar untuk melihat seberapa cocok CV ini — tanpa unggah ulang.</span></header>
+  <div class="box-b">{% include "partials/cv_job_form.html" %}</div>
+  {% endif %}
+</section>

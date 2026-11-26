@@ -242,7 +242,15 @@ async def progress_ctx(request: Request) -> dict:
         lock = bool(await pool.exists(SCRAPE_LOCK))
     except Exception:
         lock = False
-    return {"prog": summarize(await read_progress(pool), lock), "now": datetime.now(UTC)}
+    from app.services.scrape_progress import CANCEL_KEY
+
+    prog = summarize(await read_progress(pool), lock)
+    if prog and prog["state"] in ("queued", "running"):
+        try:
+            prog["cancelling"] = bool(await pool.exists(CANCEL_KEY))
+        except Exception:
+            prog["cancelling"] = False
+    return {"prog": prog, "now": datetime.now(UTC)}
 
 
 @router.post("/scrape", response_class=HTMLResponse)
@@ -259,6 +267,9 @@ async def trigger_scrape(request: Request):
     elif await pool.exists(SCRAPE_LOCK):
         msg, ok = "Scraping sedang berjalan — lihat progresnya di bawah.", True
     else:
+        from app.services.scrape_progress import CANCEL_KEY
+
+        await pool.delete(CANCEL_KEY)  # sisa tombol Batalkan sebelumnya tidak boleh menghentikan scraping baru
         # Langsung tampilkan "Memulai…" sebelum worker mengambil tugasnya.
         state = new_state("manual", {n: SOURCE_LABELS.get(n, n) for n in REGISTRY}, state="queued")
         await pool.set(PROGRESS_KEY, json.dumps(state), ex=PROGRESS_TTL)
@@ -267,6 +278,37 @@ async def trigger_scrape(request: Request):
                    else ("Scraping sudah berjalan.", True))
     resp = templates.TemplateResponse(request, "partials/flash.html", {"msg": msg, "ok": ok})
     resp.headers["HX-Trigger"] = "scrape-started"
+    return resp
+
+
+@router.post("/scrape/cancel", response_class=HTMLResponse)
+async def cancel_scrape(request: Request):
+    """Hentikan scraping yang sedang berjalan. Worker berhenti di titik aman berikutnya (sebelum halaman/keyword/
+    detail berikutnya); lowongan yang sudah tersimpan tetap ada."""
+    import json
+
+    from app.services.scrape_progress import (
+        CANCEL_KEY, CANCEL_TTL, PROGRESS_KEY, PROGRESS_TTL, _now, read_progress,
+    )
+
+    pool = getattr(request.app.state, "arq", None)
+    data = await read_progress(pool) if pool is not None else None
+    if pool is None or not data or data.get("state") not in ("queued", "running"):
+        msg, ok = "Tidak ada scraping yang sedang berjalan.", True
+    else:
+        await pool.set(CANCEL_KEY, "1", ex=CANCEL_TTL)
+        if data["state"] == "queued" and not await pool.exists(SCRAPE_LOCK):
+            # Belum diambil worker: langsung tandai batal (worker akan melewatinya saat mulai).
+            data.update(state="done", finished_at=_now(), cancelled=True)
+            for src in data["sources"].values():
+                src.update(state="cancelled", phase="Dibatalkan")
+            await pool.set(PROGRESS_KEY, json.dumps(data), ex=PROGRESS_TTL)
+            msg = "Scraping dibatalkan sebelum dimulai."
+        else:
+            msg = "Membatalkan scraping… berhenti setelah permintaan yang sedang berjalan selesai (beberapa detik)."
+        ok = True
+    resp = templates.TemplateResponse(request, "partials/flash.html", {"msg": msg, "ok": ok})
+    resp.headers["HX-Trigger"] = "scrape-started"  # segarkan panel progres & chip
     return resp
 
 

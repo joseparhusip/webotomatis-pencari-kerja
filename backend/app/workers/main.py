@@ -44,7 +44,14 @@ async def _ran_recently() -> bool:
 
 async def scrape_all_task(ctx: dict, trigger: str = "otomatis") -> list[dict] | str:
     """Hanya satu scraping boleh berjalan (jadwal otomatis & tombol manual bisa bertabrakan)."""
+    from app.services.scrape_progress import CANCEL_KEY
+
     redis = ctx["redis"]
+    if await redis.exists(CANCEL_KEY) and not await redis.exists(SCRAPE_LOCK):
+        # Dibatalkan saat masih antre (tombol Batalkan sudah menandai progresnya).
+        await redis.delete(CANCEL_KEY)
+        log.info("Scraping dibatalkan sebelum dimulai")
+        return "skipped: cancelled"
     if trigger == "otomatis" and await _ran_recently():
         # Worker di-restart (run_at_startup) padahal baru saja scraping: jangan bebani situs lagi.
         log.info("Scraping terakhir < %d menit lalu — scraping otomatis dilewati", RECENT_MINUTES)
@@ -110,12 +117,50 @@ async def cv_conclude_task(ctx: dict, cv_id: int) -> str:
     return "ok"
 
 
+async def cv_review_task(ctx: dict, review_id: int) -> str:
+    """Skor CV: kesimpulan & prioritas perbaikan dari AI (skor tetap dari aturan). Dicoba lagi bila AI sibuk."""
+    from arq.worker import Retry
+
+    from app.models import CvReview
+    from app.services import cv_score
+    from app.services.cv_status import AI_MAX_TRIES, REVIEW_AI_KEY, set_ai
+
+    attempt = ctx.get("job_try", 1)
+    async with SessionLocal() as session:
+        review = await session.get(CvReview, review_id)
+        if review is None or not review.report:
+            return "skor cv tidak ada"
+        await set_ai(review_id, "running", attempt, key=REVIEW_AI_KEY)
+        try:
+            # Bagian yang sudah selesai di percobaan sebelumnya tidak diulang.
+            if not (review.ai_review or {}).get("ai"):
+                review.ai_review = await cv_score.ai_review(review.report, review.text or "")
+                await session.commit()
+            if review.job_match and not (review.job_match.get("review") or {}).get("ai"):
+                from app.services import job_match
+
+                job_review = await job_match.ai_job_review(review.job_match, review.text or "", review.job_text or "")
+                review.job_match = {**review.job_match, "review": job_review}
+                await session.commit()
+        except Exception as exc:
+            reason = "server AI sedang sibuk" if "503" in str(exc) or "UNAVAILABLE" in str(exc) else type(exc).__name__
+            if attempt < AI_MAX_TRIES:
+                delay = min(600, 30 * 2 ** (attempt - 1))
+                await set_ai(review_id, "retry", attempt, reason, delay, key=REVIEW_AI_KEY)
+                raise Retry(defer=delay) from exc
+            await set_ai(review_id, "failed", attempt, reason, key=REVIEW_AI_KEY)
+            return f"gagal: {reason}"
+        await set_ai(review_id, "done", attempt, key=REVIEW_AI_KEY)
+    return "ok"
+
+
 async def send_application_task(ctx: dict, application_id: int) -> str:
     return await send_application(application_id)
 
 
 class WorkerSettings:
-    functions = [scrape_all_task, send_application_task, rescore_all_task, func(cv_conclude_task, max_tries=6)]
+    functions = [scrape_all_task, send_application_task, rescore_all_task, func(cv_conclude_task, max_tries=6),
+                 func(cv_review_task, max_tries=6)]
     on_startup = startup
     cron_jobs = [
         cron(

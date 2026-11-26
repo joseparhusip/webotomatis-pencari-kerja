@@ -137,3 +137,13 @@
     if (next) { next.querySelector(".job-link")?.click(); next.scrollIntoView({ block: "nearest" }); }
   });
 })();
+
+// Tombol Batalkan scraping: langsung berubah setelah dikonfirmasi (panel progres menyusul di polling berikutnya).
+document.addEventListener("htmx:beforeRequest", (e) => {
+  const b = e.detail.elt;
+  if (b instanceof HTMLElement && b.id === "scrape-cancel-btn") {
+    b.disabled = true;
+    const lbl = b.querySelector(".lbl");
+    if (lbl) lbl.textContent = "Membatalkan…";
+  }
+});

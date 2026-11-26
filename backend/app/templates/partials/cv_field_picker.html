@@ -1,0 +1,15 @@
+{# Pilihan bidang untuk Skor CV. Variabel: sel (bidang tercentang), mark (bidang bertitik hijau), mark_hint (arti titik). #}
+<fieldset class="field-picker">
+  <legend class="label">Bidang yang dicari <span class="meta">— opsional, boleh lebih dari satu</span></legend>
+  <p class="hint fp-hint">Skor kecocokan dibandingkan dengan lowongan di bidang ini. Tidak dicentang = mengikuti lowongan yang ditempel, atau ditebak dari isi CV.{% if mark %}<br><span class="dot dot-ok fp-dot" aria-hidden="true"></span> Titik hijau = {{ mark_hint }}.{% endif %}</p>
+  {% for group, keys in [('IT', IT_ROLE_KEYS), ('Non-IT', NON_IT_ROLE_KEYS)] %}
+  <p class="role-group">{{ group }}</p>
+  <div class="fp-chips">
+    {% for key in keys if key != 'other' %}
+    <label class="fp-chip"><input type="checkbox" name="role" value="{{ key }}" {% if key in sel %}checked{% endif %}>
+      <span>{{ ROLE_LABELS[key] }}{% if key in mark %} <span class="dot dot-ok" title="{{ mark_hint }}"></span>{% endif %}</span></label>
+    {% endfor %}
+  </div>
+  {% endfor %}
+  <button class="btn-link fp-clear" type="button" onclick="this.closest('fieldset').querySelectorAll('input').forEach(function(i){i.checked=false})">Kosongkan pilihan</button>
+</fieldset>

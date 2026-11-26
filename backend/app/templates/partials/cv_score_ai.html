@@ -1,0 +1,65 @@
+{% set st = ai_status.state if ai_status else '' %}
+{% set busy = st in ('queued', 'running', 'retry') %}
+<section id="cv-score-ai" class="box cvs-ai{% if busy %} is-busy{% endif %}"
+         {% if busy %}hx-get="/cv-score/{{ review.id }}/ai" hx-trigger="every 3s" hx-swap="outerHTML"{% endif %}>
+  <header class="box-h">
+    <h2>Kesimpulan</h2>
+    {% if rv.ai %}<span class="tag tag-ok">disusun {{ {'gemini': 'Gemini', 'anthropic': 'Claude'}.get(rv.ai, rv.ai) }} · dicek ke CV</span>
+    {% elif not busy %}<span class="tag">tanpa AI · dari hasil penilaian</span>{% endif %}
+    <span class="meta">Skor tidak diubah AI. AI hanya boleh membahas kriteria di atas dan angka yang tertulis di CV.</span>
+  </header>
+
+  {% if busy %}
+  <div class="box-b">
+    <div class="ai-status is-busy" role="status" aria-live="polite">
+      <span class="spinner" aria-hidden="true"></span>
+      <div><strong>{{ ai_label }} sedang menyusun kesimpulan &amp; prioritas perbaikan…</strong>
+        <span class="meta">{% if st == 'queued' %}Menunggu giliran di antrean.{% elif st == 'running' %}Sedang diproses (percobaan {{ ai_status.attempt }}/{{ ai_status.max }}).{% else %}{{ ai_status.message | capitalize }} — dicoba lagi dalam {{ ai_status.retry_in }} dtk (percobaan {{ ai_status.attempt }}/{{ ai_status.max }}).{% endif %}
+          Bagian ini diperbarui otomatis.</span></div>
+    </div>
+    <div class="skeleton" aria-hidden="true"><span></span><span></span><span class="short"></span></div>
+    <div class="cvs-ai-grid" aria-hidden="true"><div class="skeleton"><span></span><span></span></div><div class="skeleton"><span></span><span></span><span class="short"></span></div></div>
+  </div>
+  {% else %}
+  <div class="box-b">
+    {% if st == 'failed' %}
+    <div class="ai-status is-failed" role="alert"><span aria-hidden="true">▲</span>
+      <div><strong>AI belum berhasil menyusun kesimpulan</strong><span class="meta">Sudah dicoba {{ ai_status.max }}× ({{ ai_status.message }}). Di bawah ini kesimpulan langsung dari hasil penilaian.</span></div>
+      <button class="btn" hx-post="/cv-score/{{ review.id }}/ai" hx-target="#cv-score-ai" hx-swap="outerHTML">Coba lagi</button>
+    </div>
+    {% endif %}
+    <div class="cvs-verdict">
+      <span class="cvs-decision is-{{ rv.decision }}">{{ CV_DECISIONS.get(rv.decision, '') }}</span>
+      <p>{{ rv.verdict }}</p>
+    </div>
+    <div class="cvs-ai-grid">
+      <div>
+        <h3 class="cvs-crit-h">Kekuatan</h3>
+        {% if rv.strengths %}
+        <ul class="cvs-list is-good">{% for s in rv.strengths %}<li><span class="tag">{{ crit_labels.get(s.criterion, s.criterion) }}</span> {{ s.text }}</li>{% endfor %}</ul>
+        {% else %}<p class="empty-inline">Belum ada kriteria yang terpenuhi penuh.</p>{% endif %}
+      </div>
+      <div>
+        <h3 class="cvs-crit-h">Prioritas perbaikan</h3>
+        {% if rv.priorities %}
+        <ol class="cvs-list is-fix">
+          {% for p in rv.priorities %}
+          <li><span class="tag tag-warn">{{ crit_labels.get(p.criterion, p.criterion) }}</span> {{ p.text }}
+            {% if p.before and p.after %}
+            <div class="cvs-rewrite">
+              <span class="cvs-before"><b>Sebelum</b>{{ p.before }}</span>
+              <span class="cvs-after"><b>Sesudah</b>{{ p.after }}</span>
+            </div>
+            {% endif %}
+          </li>
+          {% endfor %}
+        </ol>
+        {% else %}<p class="empty-inline">Tidak ada yang perlu diperbaiki.</p>{% endif %}
+      </div>
+    </div>
+    {% if ai_ready and not rv.ai and st != 'failed' %}
+    <button class="btn mt" hx-post="/cv-score/{{ review.id }}/ai" hx-target="#cv-score-ai" hx-swap="outerHTML">Susun kesimpulan dengan {{ ai_label }}</button>
+    {% elif not ai_ready %}<p class="hint mt">AI belum aktif — isi API key di Pengaturan untuk kesimpulan dan contoh kalimat perbaikan dari AI.</p>{% endif %}
+  </div>
+  {% endif %}
+</section>

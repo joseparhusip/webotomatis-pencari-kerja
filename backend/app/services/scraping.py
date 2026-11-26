@@ -14,7 +14,7 @@ from app.models import JobListing, ScrapeRun, Source
 from app.services.details import backfill
 from app.services.ingest import ingest
 from app.services.letter_template import SOURCE_LABELS
-from app.services.scrape_progress import SKIP_KEY, SKIP_TTL, NullProgress, Progress, get_redis
+from app.services.scrape_progress import CANCELLED_NOTE, CANCEL_KEY, NullProgress, Progress, SKIP_KEY, SKIP_TTL, ScrapeCancelled, cancel_requested, get_redis
 from app.services.targeting import load_target, search_keywords
 
 log = logging.getLogger(__name__)
@@ -103,62 +103,83 @@ async def run_connector(connector: Connector, keywords: list[str] | None = None,
         await progress.source(name, state="running", phase="Mencari lowongan", done=0, total=len(keywords))
 
         blocked = False  # situs membalas 429/403: berhenti mengakses situs ini sampai scraping berikutnya
-        async with new_http_client(settings.http_timeout_seconds) as client:
-            for k_index, keyword in enumerate(keywords, 1):
-                if blocked:
-                    break
-                phase = (f"Mencari lowongan · {connector.keyword_label(keyword)}" if len(keywords) > 1
-                         else "Mencari lowongan")
-                await progress.source(name, phase=phase)
-                for page in range(1, max_pages + 1):
-                    try:
-                        result = await connector.search(client, keyword, page, known | old)
-                    except httpx.HTTPStatusError as exc:
-                        if exc.response.status_code in (403, 429):
-                            blocked = True
-                            msg = (f"situs membatasi akses (HTTP {exc.response.status_code}) di '{keyword}' — "
-                                   "sisa keyword dilanjutkan pada scraping berikutnya")
-                        else:
-                            msg = f"'{keyword}' hal. {page}: HTTP {exc.response.status_code}"
-                        log.warning("%s %s", name, msg)
-                        errors.append(msg)
+        cancelled = False
+
+        async def check_cancel() -> None:
+            if await cancel_requested(redis):
+                raise ScrapeCancelled
+
+        try:
+            async with new_http_client(settings.http_timeout_seconds) as client:
+                for k_index, keyword in enumerate(keywords, 1):
+                    await check_cancel()
+                    if blocked:
                         break
-                    except (httpx.HTTPError, ValueError, KeyError) as exc:
-                        msg = f"'{keyword}' hal. {page}: {type(exc).__name__}: {exc}"
-                        log.warning("%s %s", name, msg)
-                        errors.append(msg)
+                    phase = (f"Mencari lowongan · {connector.keyword_label(keyword)}" if len(keywords) > 1
+                             else "Mencari lowongan")
+                    await progress.source(name, phase=phase)
+                    for page in range(1, max_pages + 1):
+                        await check_cancel()
+                        try:
+                            result = await connector.search(client, keyword, page, known | old)
+                        except httpx.HTTPStatusError as exc:
+                            if exc.response.status_code in (403, 429):
+                                blocked = True
+                                msg = (f"situs membatasi akses (HTTP {exc.response.status_code}) di '{keyword}' — "
+                                       "sisa keyword dilanjutkan pada scraping berikutnya")
+                            else:
+                                msg = f"'{keyword}' hal. {page}: HTTP {exc.response.status_code}"
+                            log.warning("%s %s", name, msg)
+                            errors.append(msg)
+                            break
+                        except (httpx.HTTPError, ValueError, KeyError) as exc:
+                            msg = f"'{keyword}' hal. {page}: {type(exc).__name__}: {exc}"
+                            log.warning("%s %s", name, msg)
+                            errors.append(msg)
+                            await asyncio.sleep(settings.request_delay_seconds)
+                            break
+                        # Aturan umum: hanya lowongan yang diposting dalam SCRAPE_MAX_AGE_DAYS hari terakhir.
+                        too_old = [i for i in result.items if i.posted_at is not None and i.posted_at < cutoff]
+                        await _remember_old(redis, name, too_old)
+                        old.update(i.external_id for i in too_old)
+                        result.items = [i for i in result.items if i.posted_at is None or i.posted_at >= cutoff]
+                        found += len(result.items)
+                        new += await ingest(session, source, result.items, datetime.now(UTC))
+                        await session.commit()
+                        known.update(i.external_id for i in result.items)
+                        await progress.source(name, found=found, new=new)
+                        if not result.has_more:
+                            break
                         await asyncio.sleep(settings.request_delay_seconds)
-                        break
-                    # Aturan umum: hanya lowongan yang diposting dalam SCRAPE_MAX_AGE_DAYS hari terakhir.
-                    too_old = [i for i in result.items if i.posted_at is not None and i.posted_at < cutoff]
-                    await _remember_old(redis, name, too_old)
-                    old.update(i.external_id for i in too_old)
-                    result.items = [i for i in result.items if i.posted_at is None or i.posted_at >= cutoff]
-                    found += len(result.items)
-                    new += await ingest(session, source, result.items, datetime.now(UTC))
-                    await session.commit()
-                    known.update(i.external_id for i in result.items)
-                    await progress.source(name, found=found, new=new)
-                    if not result.has_more:
-                        break
-                    await asyncio.sleep(settings.request_delay_seconds)
-                await progress.source(name, done=k_index)
+                    await progress.source(name, done=k_index)
 
-            # Halaman detail: isi lengkap lowongan baru + perbarui yang sudah lama (bisa diedit/ditutup).
-            async def on_detail(done: int, total: int) -> None:
-                await progress.source(name, phase="Mengambil detail lowongan", done=done, total=total, details=done)
+                # Halaman detail: isi lengkap lowongan baru + perbarui yang sudah lama (bisa diedit/ditutup).
+                async def on_detail(done: int, total: int) -> None:
+                    await progress.source(name, phase="Mengambil detail lowongan", done=done, total=total, details=done)
+                    await check_cancel()
 
-            detail_ok, detail_fail = (0, 0) if blocked else await backfill(
-                session, source, connector, client, on_progress=on_detail)
-            if detail_fail:
-                errors.append(f"{detail_fail} halaman detail gagal diambil (dicoba lagi nanti)")
+                await check_cancel()
+                detail_ok, detail_fail = (0, 0) if blocked else await backfill(
+                    session, source, connector, client, on_progress=on_detail)
+                if detail_fail:
+                    errors.append(f"{detail_fail} halaman detail gagal diambil (dicoba lagi nanti)")
+        except ScrapeCancelled:
+            # Lowongan yang sudah tersimpan (commit per halaman) tetap ada; sisa pekerjaan tidak dilanjutkan.
+            await session.rollback()
+            cancelled = True
+            log.info("%s dibatalkan pengguna (%d ditemukan, %d baru)", name, found, new)
 
         run.finished_at = datetime.now(UTC)
         run.jobs_found = found
         run.jobs_new = new
-        run.error = "\n".join(errors) or None
+        run.error = (f"{CANCELLED_NOTE} oleh pengguna" + ("\n" + "\n".join(errors) if errors else "")) if cancelled \
+            else ("\n".join(errors) or None)
         await session.commit()
 
+    if cancelled:
+        await progress.source(name, state="cancelled", phase="Dibatalkan", found=found, new=new, details=detail_ok,
+                              note=f"{new} lowongan baru tersimpan" if new else "")
+        return {"source": name, "found": found, "new": new, "details": detail_ok, "cancelled": True}
     await progress.source(name, state="done", phase="Selesai", found=found, new=new, details=detail_ok,
                           note=f"{len(errors)} kendala" if errors else "")
     log.info("%s: %d ditemukan, %d baru, %d detail, %d error", name, found, new, detail_ok, len(errors))
@@ -185,7 +206,12 @@ async def scrape_all(trigger: str = "otomatis") -> list[dict]:
             await progress.source(name, state="error", phase="Gagal", note=type(exc).__name__)
             return {"source": name, "error": repr(exc)}
 
+    results: list[dict] = []
     try:
-        return list(await asyncio.gather(*(one(n, c) for n, c in REGISTRY.items())))
+        results = list(await asyncio.gather(*(one(n, c) for n, c in REGISTRY.items())))
+        return results
     finally:
-        await progress.finish()
+        cancelled = await cancel_requested(get_redis())
+        await progress.finish(cancelled=cancelled)
+        if cancelled:
+            await get_redis().delete(CANCEL_KEY)

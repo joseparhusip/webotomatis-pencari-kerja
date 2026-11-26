@@ -7,6 +7,7 @@ from app.models import Application, Job
 from app.models.enums import ApplicationStatus, JobStatus
 from app.services.jobs import JobFilters, build_query, latest_runs
 from app.services.profile import get_profile
+from app.services.scrape_progress import is_cancel_note
 from app.web.templating import initials
 
 
@@ -26,7 +27,7 @@ async def shell_context(session: AsyncSession) -> dict:
     return {
         "last_scrape": max(finished) if finished else None,
         "running": any(r.finished_at is None for r in runs),
-        "failed_runs": [r for r in runs if r.error],
+        "failed_runs": [r for r in runs if r.error and not is_cancel_note(r.error)],
         "source_count": len(runs),
         "nav_new_jobs": new_jobs,
         "nav_drafts": drafts,

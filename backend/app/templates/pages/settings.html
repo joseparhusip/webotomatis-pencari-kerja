@@ -117,7 +117,7 @@
     {% for s in sources %}{% set r = latest.get(s.id) %}
     <article class="src">
       <header class="src-h">
-        <span class="dot {% if not s.is_active %}{% elif r and r.error %}dot-warn{% elif r and r.finished_at %}dot-ok{% elif r %}dot-info dot-pulse{% endif %}" aria-hidden="true"></span>
+        <span class="dot {% if not s.is_active %}{% elif r and r.error and r.error.startswith('Dibatalkan') %}{% elif r and r.error %}dot-warn{% elif r and r.finished_at %}dot-ok{% elif r %}dot-info dot-pulse{% endif %}" aria-hidden="true"></span>
         <a href="{{ s.base_url }}" target="_blank" rel="noopener">{{ s.name }}</a>
         <span class="meta">{{ s.type.value }}</span>
       </header>
@@ -132,7 +132,8 @@
         {% elif r %}Sedang berjalan…
         {% else %}Belum pernah{% endif %}
       </p>
-      {% if r and r.error %}<p class="meta text-warn">▲ {{ r.error.splitlines() | length }} request gagal · lihat riwayat</p>{% endif %}
+      {% if r and r.error and r.error.startswith('Dibatalkan') %}<p class="meta">■ Scraping terakhir dibatalkan · lowongan yang sudah diambil tetap tersimpan</p>
+      {% elif r and r.error %}<p class="meta text-warn">▲ {{ r.error.splitlines() | length }} request gagal · lihat riwayat</p>{% endif %}
     </article>
     {% endfor %}
   </div>
@@ -204,7 +205,7 @@
           <td class="col-num num">{% if r.finished_at %}{{ ((r.finished_at - r.started_at).total_seconds() | int) }} dtk{% else %}berjalan{% endif %}</td>
           <td class="col-num num">{{ r.jobs_found }}</td>
           <td class="col-num num">{{ r.jobs_new }}</td>
-          <td>{% if r.error %}<details><summary class="{{ 'text-warn' if r.error.startswith('Terhenti') else 'text-danger' }}">▲ {{ 'terhenti' if r.error.startswith('Terhenti') else 'lihat' }}</summary><pre class="log">{{ r.error }}</pre></details>{% else %}<span class="meta">—</span>{% endif %}</td>
+          <td>{% if r.error %}<details><summary class="{{ 'meta' if r.error.startswith('Dibatalkan') else 'text-warn' if r.error.startswith('Terhenti') else 'text-danger' }}">{{ '■ dibatalkan' if r.error.startswith('Dibatalkan') else '▲ terhenti' if r.error.startswith('Terhenti') else '▲ lihat' }}</summary><pre class="log">{{ r.error }}</pre></details>{% else %}<span class="meta">—</span>{% endif %}</td>
         </tr>
       {% endfor %}
       </tbody>

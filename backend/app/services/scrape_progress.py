@@ -14,6 +14,26 @@ from datetime import UTC, datetime
 log = logging.getLogger(__name__)
 
 PROGRESS_KEY = "webotomatis:scrape-progress"
+CANCEL_KEY = "webotomatis:scrape-cancel"   # diset tombol "Batalkan"; worker berhenti di titik aman berikutnya
+CANCEL_TTL = 60 * 60
+CANCELLED_NOTE = "Dibatalkan"              # awalan ScrapeRun.error untuk run yang dihentikan pengguna (bukan error)
+
+
+class ScrapeCancelled(Exception):
+    """Pengguna menekan Batalkan."""
+
+
+async def cancel_requested(redis) -> bool:
+    if redis is None:
+        return False
+    try:
+        return bool(await redis.exists(CANCEL_KEY))
+    except Exception:
+        return False
+
+
+def is_cancel_note(error: str | None) -> bool:
+    return bool(error) and error.startswith(CANCELLED_NOTE)
 PROGRESS_TTL = 60 * 60 * 12
 SKIP_KEY = "webotomatis:scrape-skip:{}"  # sorted set: external_id lowongan lama (skor = waktu posting)
 SKIP_TTL = 60 * 60 * 24 * 30
@@ -70,9 +90,14 @@ class Progress:
         self.data["sources"][name].update(fields)
         await self.save()
 
-    async def finish(self) -> None:
+    async def finish(self, cancelled: bool = False) -> None:
         self.data["state"] = "done"
         self.data["finished_at"] = _now()
+        if cancelled:
+            self.data["cancelled"] = True
+            for src in self.data["sources"].values():
+                if src["state"] in ("waiting", "running"):
+                    src.update(state="cancelled", phase="Dibatalkan")
         await self.save()
 
 
@@ -106,7 +131,7 @@ async def mark_interrupted(redis) -> None:
 # ---------- ringkasan untuk tampilan ----------
 
 def source_percent(s: dict) -> int:
-    if s["state"] in ("done", "skipped", "error"):
+    if s["state"] in ("done", "skipped", "error", "cancelled"):
         return 100
     if s["state"] == "waiting":
         return 0
@@ -137,7 +162,8 @@ def summarize(data: dict | None, lock_held: bool) -> dict | None:
     return {
         "state": state, "stalled": stalled, "trigger": data.get("trigger", "otomatis"), "percent": percent,
         "rows": rows, "elapsed": elapsed, "finished_at": finished, "started_at": started,
-        "done_count": sum(r["state"] in ("done", "error") for r in counted), "total_count": len(counted),
+        "cancelled": bool(data.get("cancelled")),
+        "done_count": sum(r["state"] in ("done", "error", "cancelled") for r in counted), "total_count": len(counted),
         "running_names": [r["label"] for r in rows if r["state"] == "running"],
         "found": sum(r["found"] for r in rows), "new": sum(r["new"] for r in rows),
         "errors": sum(r["state"] == "error" for r in rows),

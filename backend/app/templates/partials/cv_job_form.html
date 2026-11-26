@@ -1,0 +1,10 @@
+<form method="post" action="/cv-score/{{ review.id }}/job" class="cvs-job-form"
+      data-scan="Mencocokkan CV dengan lowongan" data-scan-steps="job">
+  <label class="field"><span class="label">Nama posisi</span>
+    <input type="text" name="job_title" maxlength="200" placeholder="mis. Digital Marketing Staff"></label>
+  <label class="field"><span class="label">Isi lowongan</span>
+    <textarea name="job_text" rows="6" maxlength="15000" required data-count
+              placeholder="Copy-paste dari Glints, JobStreet, Kalibrr, LinkedIn, dll.: deskripsi, job desk, kualifikasi."></textarea>
+    <span class="hint"><span data-count-for="job_text">0</span> / 15.000 karakter</span></label>
+  <button class="btn btn-primary" type="submit">Cek kecocokan</button>
+</form>

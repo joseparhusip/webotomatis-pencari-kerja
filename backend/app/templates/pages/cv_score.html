@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+{% block title %}Skor CV{% endblock %}
+{% block body %}
+<div class="page cvs-page">
+  <header class="page-head">
+    <div>
+      <h1>Skor CV</h1>
+      <p class="sub">Nilai CV dari 23 kriteria + dibandingkan dengan lowongan hasil scraping. Teks dibaca langsung atau dengan OCR,
+        skor dihitung dengan aturan tetap, lalu AI menyusun kesimpulan dari hasil itu.</p>
+    </div>
+  </header>
+
+  {% if ok %}<p class="flash flash-ok" role="status">{{ ok }}</p>{% endif %}
+  {% if err %}<p class="flash flash-err" role="alert">{{ err }}</p>{% endif %}
+
+  <div class="cvs-start">
+    <form method="post" action="/cv-score" enctype="multipart/form-data" class="cvs-upload box"
+          data-scan="Menilai CV" data-scan-steps="score" data-cv-drop data-max-mb="{{ max_mb }}">
+      <label class="dropzone">
+        <input type="file" name="file" required
+               accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document">
+        <span class="dz-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M14 3v5h5M12 17v-6m-2.5 2.5L12 11l2.5 2.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </span>
+        <strong class="dz-title">Tarik CV ke sini atau <u>pilih file</u></strong>
+        <span class="dz-sub">PDF atau Word (.docx) · maks. {{ max_mb }} MB</span>
+        <span class="dz-file" hidden></span>
+        <span class="dz-error text-danger" role="alert" hidden></span>
+      </label>
+      <div class="job-input" id="lowongan">
+        <div class="job-input-h">
+          <span class="job-input-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="13" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M9 7V5.5A1.5 1.5 0 0 1 10.5 4h3A1.5 1.5 0 0 1 15 5.5V7M3 12.5h18" fill="none" stroke="currentColor" stroke-width="1.7"/></svg></span>
+          <div><strong>Lowongan yang mau dilamar</strong> <span class="meta">— opsional</span>
+            <span class="hint">Dapat skor tambahan: seberapa cocok CV ini dengan lowongan itu (skill, pengalaman, pendidikan, jurusan, bahasa).</span></div>
+        </div>
+        {% if picked_job %}
+        <input type="hidden" name="job_id" value="{{ picked_job.id }}">
+        <div class="job-picked">
+          <div><strong>{{ picked_job.title }}</strong><span class="meta">{{ picked_job.company_name }} · dari daftar Lowongan (deskripsi, syarat & skill diambil dari database)</span></div>
+          <a class="btn-link" href="/cv-score">Ganti / tempel lowongan lain</a>
+        </div>
+        {% else %}
+        <label class="field"><span class="label">Nama posisi</span>
+          <input type="text" name="job_title" maxlength="200" placeholder="mis. Digital Marketing Staff"></label>
+        <label class="field"><span class="label">Isi lowongan</span>
+          <textarea name="job_text" rows="7" maxlength="{{ max_job_chars }}" data-count
+                    placeholder="Copy-paste dari Glints, JobStreet, Kalibrr, LinkedIn, Instagram, dll.: deskripsi pekerjaan, job desk, kualifikasi, syarat pendidikan & pengalaman."></textarea>
+          <span class="hint"><span data-count-for="job_text">0</span> / {{ max_job_chars | number_id }} karakter · kosongkan bila hanya ingin menilai CV.</span></label>
+        {% endif %}
+      </div>
+      {% with sel = [], mark = current_target().categories | map(attribute='value') | list, mark_hint = 'bidang dari CV utama di Profil' %}
+      {% include "partials/cv_field_picker.html" %}
+      {% endwith %}
+      <div class="cvs-upload-foot">
+        <span class="meta">File tidak disimpan — hanya teks &amp; hasil penilaiannya.</span>
+        <div class="cvs-actions">
+          {% if main_cv %}
+          <button class="btn" type="submit" formaction="/cv-score/from-profile" formnovalidate
+                  title="Nilai CV utama di Profil: {{ main_cv.title }}">Pakai CV utama</button>
+          {% endif %}
+          <button class="btn btn-primary" type="submit">Nilai CV</button>
+        </div>
+      </div>
+    </form>
+
+    <aside class="cvs-side">
+      <div class="box cvs-how">
+        <div class="box-b">
+          <span class="label">Cara menilai</span>
+          <ol class="cvs-steps">
+            <li><b>Baca</b> teks PDF/Word; bila berupa gambar → OCR lokal</li>
+            <li><b>Petakan</b> kontak, pengalaman, pendidikan, skill (kode, bukan AI)</li>
+            <li><b>Nilai</b> 23 kriteria dengan aturan tetap + data lowongan di database</li>
+            <li><b>Simpulkan</b> — AI{% if not ai_ready %} (belum aktif){% endif %} hanya boleh memakai hasil di atas</li>
+          </ol>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <section class="box mt">
+    <header class="box-h"><h2>Riwayat</h2><span class="meta">{{ history | length }} penilaian terakhir</span></header>
+    {% if history %}
+    <ul class="cvs-history">
+      {% for h in history %}
+      {% set tone = 'ok' if h.score >= 70 else 'warn' if h.score >= 55 else 'danger' %}
+      <li>
+        <a href="/cv-score/{{ h.id }}" class="cvs-hrow">
+          <span class="cvs-badge tone-{{ tone }}">{{ h.score }}</span>
+          <span class="cvs-hname"><strong>{{ h.filename }}</strong>
+            <span class="meta">{{ h.report.grade }} · {{ h.file_type | upper }}{% if h.method == 'ocr' %} · OCR{% endif %}{% if h.source == 'profile' %} · CV utama{% endif %} · {{ h.created_at | date_id(True) }}</span>
+            {% if h.job_score is not none %}<span class="cvs-hjob">Kecocokan {{ h.job_score }}/100 · {{ h.job_title }}</span>{% endif %}</span>
+          <span class="cvs-arrow" aria-hidden="true">›</span>
+        </a>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p class="box-b empty-inline">Belum ada CV yang dinilai.</p>
+    {% endif %}
+  </section>
+</div>
+{% endblock %}
